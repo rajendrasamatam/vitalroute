@@ -1,18 +1,32 @@
 import React from 'react';
-import DashboardLayout from './DashboardLayout';
+import GenericDashboard from './GenericDashboard';
+import AdminOverview from './Admin/AdminOverview';
+import UserManagement from './Admin/UserManagement';
+
+const MENU_ITEMS = [
+    { id: 'overview', label: 'Dashboard Overview' },
+    { id: 'users', label: 'User & Role Management' },
+    { id: 'map', label: 'Live Traffic Map' },
+    { id: 'requests', label: 'Emergency Requests' },
+    { id: 'vehicles', label: 'Active Vehicles' },
+    { id: 'signals', label: 'Traffic Signals & Junctions' },
+    { id: 'corridor', label: 'Green Corridor Status' },
+    { id: 'logs', label: 'System Logs & History' },
+    { id: 'settings', label: 'Settings' },
+];
 
 const AdminDashboard = () => {
     return (
-        <DashboardLayout title="City Command Center" role="Administrator">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', width: '100%', marginTop: '40px' }}>
-                {['Traffic Grid', 'Emergency Alerts', 'System Health'].map(item => (
-                    <div key={item} style={{ background: '#f9f9f9', padding: '30px', borderRadius: '12px', textAlign: 'center' }}>
-                        <h3 style={{ margin: 0 }}>{item}</h3>
-                        <div style={{ marginTop: '10px', color: 'green' }}>Active</div>
-                    </div>
-                ))}
-            </div>
-        </DashboardLayout>
+        <GenericDashboard
+            roleTitle="COMMAND CENTER"
+            roleId="admin"
+            menuItems={MENU_ITEMS}
+            OverviewComponent={AdminOverview}
+            renderCustomContent={(view) => {
+                if (view === 'users') return <UserManagement />;
+                return null;
+            }}
+        />
     );
 };
 

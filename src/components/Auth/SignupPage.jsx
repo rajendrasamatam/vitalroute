@@ -66,6 +66,12 @@ const SignupPage = () => {
             return;
         }
 
+        if (!image) {
+            setError("Profile photo is required to complete signup.");
+            setLoading(false);
+            return;
+        }
+
         if (!formData.role) {
             setError("Please select a role");
             setLoading(false);
@@ -113,6 +119,7 @@ const SignupPage = () => {
                 fullName: formData.fullName,
                 email: formData.email,
                 role: formData.role,
+                status: 'pending', // Default status for new users
                 profileImage: imageUrl,
                 createdAt: new Date()
             });
@@ -174,7 +181,10 @@ const SignupPage = () => {
                                 {imagePreview ? (
                                     <img src={imagePreview} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 ) : (
-                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: '2rem' }}>+</div>
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+                                        <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>+</span>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>PHOTO*</span>
+                                    </div>
                                 )}
                             </div>
                             <input type="file" onChange={handleFileChange} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} />
