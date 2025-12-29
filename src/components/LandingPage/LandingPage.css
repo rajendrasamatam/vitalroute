@@ -300,8 +300,32 @@
 }
 
 @media (max-width: 768px) {
+    .vital-nav {
+        padding: 20px;
+    }
+
     .hero-title {
         font-size: 14vw;
+    }
+
+    .hero-subtitle {
+        max-width: 100%;
+        margin-top: 20px;
+        font-size: 1rem;
+    }
+
+    .hero-cta-container {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 20px;
+    }
+
+    .vital-section {
+        padding: 60px 20px;
+    }
+
+    .hero-content {
+        padding: 40px 20px !important;
     }
 
     .ochi-cards {
@@ -311,4 +335,30 @@
     .marquee-text {
         font-size: 18vw;
     }
+
+    .impact-grid {
+        grid-template-columns: 1fr !important;
+        gap: 30px;
+    }
+
+    .impact-title {
+        font-size: 2.5rem !important;
+    }
+}
+
+/* Helper Classes to replace inline styles */
+.hero-cta-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 60px;
+    border-top: 1px solid #ccc;
+    padding-top: 20px;
+}
+
+.impact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 40px;
+    width: 100%;
 }
