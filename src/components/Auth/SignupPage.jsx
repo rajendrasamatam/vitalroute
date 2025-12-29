@@ -313,6 +313,17 @@ const SignupPage = () => {
                     background: #222 !important;
                     transform: translateY(-2px);
                 }
+                
+                /* Mobile Responsiveness */
+                @media (max-width: 600px) {
+                    form > div[style*="grid-template-columns"] {
+                        grid-template-columns: 1fr !important;
+                        gap: 15px !important;
+                    }
+                    h1 {
+                        font-size: 2rem !important;
+                    }
+                }
             `}</style>
         </div>
     );

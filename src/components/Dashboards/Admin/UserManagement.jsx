@@ -56,25 +56,13 @@ const UserRow = ({ user, onAction }) => {
 
     return (
         <div
+            className="user-row"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            style={{
-                display: 'grid',
-                gridTemplateColumns: '60px 2fr 1.5fr 1.5fr 1fr 1.5fr',
-                alignItems: 'center',
-                padding: '20px',
-                background: '#fff',
-                borderRadius: '12px',
-                marginBottom: '10px',
-                transition: 'all 0.2s ease',
-                boxShadow: isHovered ? '0 5px 20px rgba(0,0,0,0.05)' : 'none',
-                border: '1px solid transparent',
-                transform: isHovered ? 'scale(1.005)' : 'scale(1)',
-                cursor: 'default'
-            }}
+            onClick={() => setIsHovered(!isHovered)} // Toggle for mobile
         >
             {/* Avatar */}
-            <div>
+            <div className="user-avatar">
                 <div style={{
                     width: '40px', height: '40px', borderRadius: '50%', background: '#eee',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888',
@@ -89,49 +77,45 @@ const UserRow = ({ user, onAction }) => {
             </div>
 
             {/* Name & Email */}
-            <div>
+            <div className="user-info">
                 <div style={{ fontWeight: 600, color: '#111' }}>{user.fullName || 'Unknown User'}</div>
                 <div style={{ fontSize: '0.85rem', color: '#888' }}>{user.email}</div>
             </div>
 
             {/* Role */}
-            <div style={{ color: '#555', fontSize: '0.9rem', textTransform: 'capitalize' }}>
+            <div className="user-role" style={{ color: '#555', fontSize: '0.9rem', textTransform: 'capitalize' }}>
                 {ROLES.find(r => r.id === user.role)?.label || user.role}
             </div>
 
             {/* Status */}
-            <div>
+            <div className="user-status">
                 <StatusBadge status={user.status} />
             </div>
 
             {/* Empty Spacer */}
-            <div></div>
+            <div className="spacer"></div>
 
             {/* Actions */}
-            <div style={{
+            <div className="user-actions" style={{
                 opacity: isHovered ? 1 : 0,
-                transition: 'opacity 0.2s',
-                display: 'flex',
-                gap: '10px',
-                justifyContent: 'flex-end'
             }}>
                 {(user.status === 'pending' || !user.status) && (
                     <button
-                        onClick={() => onAction(user.uid, 'verify')}
+                        onClick={(e) => { e.stopPropagation(); onAction(user.uid, 'verify'); }}
                         style={{ ...actionBtnStyle, background: '#000', color: '#fff' }}>
                         Verify
                     </button>
                 )}
                 {user.status !== 'suspended' && (
                     <button
-                        onClick={() => onAction(user.uid, 'suspend')}
+                        onClick={(e) => { e.stopPropagation(); onAction(user.uid, 'suspend'); }}
                         style={{ ...actionBtnStyle, border: '1px solid #ddd', color: '#555' }}>
                         Suspend
                     </button>
                 )}
                 {user.status === 'suspended' && (
                     <button
-                        onClick={() => onAction(user.uid, 'verify')}
+                        onClick={(e) => { e.stopPropagation(); onAction(user.uid, 'verify'); }}
                         style={{ ...actionBtnStyle, border: '1px solid #ddd', color: '#166534' }}>
                         Reactivate
                     </button>
@@ -200,8 +184,8 @@ const UserManagement = () => {
                 </div>
             </div>
 
-            {/* Table Header */}
-            <div style={{
+            {/* Table Header - Hide on Mobile */}
+            <div className="table-header" style={{
                 display: 'grid',
                 gridTemplateColumns: '60px 2fr 1.5fr 1.5fr 1fr 1.5fr',
                 padding: '0 20px 15px',
@@ -222,7 +206,7 @@ const UserManagement = () => {
             {/* List */}
             <div>
                 {users.map(user => (
-                    <UserRow key={user.id} user={user} onAction={handleAction} />
+                    <UserRow key={user.uid} user={user} onAction={handleAction} />
                 ))}
             </div>
 
@@ -230,6 +214,91 @@ const UserManagement = () => {
                 @keyframes fadeIn {
                     from { opacity: 0; transform: translateY(10px); }
                     to { opacity: 1; transform: translateY(0); }
+                }
+
+                .user-row {
+                    display: grid;
+                    grid-template-columns: 60px 2fr 1.5fr 1.5fr 1fr 1.5fr;
+                    align-items: center;
+                    padding: 20px;
+                    background: #fff;
+                    border-radius: 12px;
+                    margin-bottom: 10px;
+                    transition: all 0.2s ease;
+                    border: 1px solid transparent;
+                    cursor: default;
+                }
+
+                .user-row:hover {
+                    box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+                    transform: scale(1.005);
+                }
+
+                .user-actions {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: flex-end;
+                    transition: opacity 0.2s;
+                }
+
+                @media (max-width: 900px) {
+                     .user-row {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: flex-start;
+                        position: relative;
+                        padding-bottom: 70px; /* Space for actions */
+                    }
+                    .table-header { display: none !important; }
+                    
+                    /* Avatar & Info Container */
+                    .user-avatar {
+                        margin-bottom: 10px;
+                    }
+
+                    .user-info {
+                        width: 100%;
+                        padding-right: 90px; /* Space for absolute badge */
+                        margin-bottom: 5px;
+                    }
+                    
+                    /* Role below info */
+                    .user-role {
+                        font-size: 0.85rem;
+                        color: #666;
+                        background: #f9f9f9;
+                        padding: 4px 10px;
+                        border-radius: 4px;
+                        margin-bottom: 10px;
+                        display: inline-block;
+                    }
+
+                    /* Absolute Badge Top Right */
+                    .user-status {
+                        position: absolute;
+                        top: 20px;
+                        right: 20px;
+                        text-align: right;
+                    }
+
+                    .spacer { display: none; }
+                    
+                    /* Full width actions at bottom */
+                    .user-actions {
+                        position: absolute;
+                        bottom: 15px;
+                        left: 20px;
+                        right: 20px;
+                        justify-content: stretch;
+                        opacity: 1 !important;
+                        border-top: 1px solid #f0f0f0;
+                        padding-top: 15px;
+                        gap: 10px;
+                    }
+                    .user-actions button {
+                        flex: 1;
+                        justify-content: center;
+                    }
                 }
             `}</style>
         </div>

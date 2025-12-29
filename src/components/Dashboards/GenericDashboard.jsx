@@ -174,17 +174,24 @@ const GenericDashboard = ({
                 footerItem={{ label: 'Logout', onClick: () => handleMenuClick('logout') }}
             />
 
-            <main style={{
-                paddingTop: '100px',
-                paddingLeft: '40px',
-                paddingRight: '40px',
-                paddingBottom: '40px',
-                minHeight: '100vh',
+            <main className="dashboard-main" style={{
                 transition: 'filter 0.3s',
-                filter: isSidebarOpen ? 'blur(2px)' : 'none'
+                filter: isSidebarOpen ? 'blur(2px)' : 'none',
+                minHeight: '100vh'
             }}>
                 {renderContent()}
             </main>
+
+            <style>{`
+                .dashboard-main {
+                    padding: 100px 40px 40px 40px;
+                }
+                @media (max-width: 768px) {
+                    .dashboard-main {
+                        padding: 80px 20px 20px 20px;
+                    }
+                }
+            `}</style>
         </div>
     );
 };
