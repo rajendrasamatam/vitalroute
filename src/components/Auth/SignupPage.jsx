@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { auth, db } from '../../firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { auth, db, storage } from '../../firebase';
+import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const ROLES = [
     { id: 'admin', label: 'Admin', route: '/dashboard/admin' },
@@ -15,10 +16,14 @@ const ROLES = [
 
 const SignupPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [focused, setFocused] = useState('');
+
+    // Optimistically set state if we have location state from redirects (e.g. from Google Login)
+    const [isGoogleAuth, setIsGoogleAuth] = useState(!!location.state?.email);
     const [formData, setFormData] = useState({
-        fullName: '',
-        email: '',
+        fullName: location.state?.fullName || '',
+        email: location.state?.email || '',
         password: '',
         confirmPassword: '',
         role: ''
@@ -27,6 +32,21 @@ const SignupPage = () => {
     const [imagePreview, setImagePreview] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                setIsGoogleAuth(true);
+                // Only update if not already set (prevents overwriting user input if they typed something)
+                setFormData(prev => ({
+                    ...prev,
+                    email: user.email || prev.email,
+                    fullName: user.displayName || prev.fullName
+                }));
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
     const handleFileChange = (e) => {
         if (e.target.files[0]) {
@@ -40,7 +60,7 @@ const SignupPage = () => {
         setError('');
         setLoading(true);
 
-        if (formData.password !== formData.confirmPassword) {
+        if (!isGoogleAuth && formData.password !== formData.confirmPassword) {
             setError("Passwords do not match");
             setLoading(false);
             return;
@@ -53,9 +73,21 @@ const SignupPage = () => {
         }
 
         try {
-            // 1. Create User
-            const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-            const user = userCredential.user;
+            let user = auth.currentUser;
+
+            if (isGoogleAuth) {
+                // If optimistic state says Google Auth, but no user is found, wait or check if we can rely on location state?
+                // No, we NEED the uid to write to Firestore.
+                if (!user) {
+                    // Try one small delay in case auth is initializing? 
+                    // Or simply throw error.
+                    // IMPORTANT: If 'user' is null, we likely have a session issue.
+                    throw new Error("Google authentication session not found. Please try logging in again via Google.");
+                }
+            } else {
+                const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+                user = userCredential.user;
+            }
 
             let imageUrl = null;
 
@@ -72,7 +104,6 @@ const SignupPage = () => {
                     imageUrl = data.data.url;
                 } else {
                     console.error("ImgBB Upload Error:", data);
-                    // Start fallback or continue without image? Continuing without image for now, or could throw error.
                 }
             }
 
@@ -121,7 +152,8 @@ const SignupPage = () => {
                     color: '#000',
                     lineHeight: 1
                 }}>
-                    CREATE YOUR<br />ACCOUNT
+                    {isGoogleAuth ? "COMPLETE YOUR" : "CREATE YOUR"}<br />
+                    {isGoogleAuth ? "PROFILE" : "ACCOUNT"}
                 </h1>
 
                 <p style={{ color: '#666', marginBottom: '40px', lineHeight: 1.5 }}>
@@ -188,45 +220,49 @@ const SignupPage = () => {
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             onFocus={() => setFocused('email')}
                             onBlur={() => setFocused('')}
+                            readOnly={isGoogleAuth}
                             style={{
                                 width: '100%', padding: '15px 0', background: 'transparent',
                                 border: 'none', borderBottom: `1px solid ${focused === 'email' ? '#000' : '#ccc'}`,
-                                outline: 'none', color: '#000'
+                                outline: 'none', color: isGoogleAuth ? '#666' : '#000',
+                                cursor: isGoogleAuth ? 'not-allowed' : 'text'
                             }}
                             required
                         />
                     </div>
 
-                    <div style={{ marginBottom: '40px' }}>
-                        <input
-                            type="password"
-                            placeholder="Password"
-                            value={formData.password}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            onFocus={() => setFocused('password')}
-                            onBlur={() => setFocused('')}
-                            style={{
-                                width: '100%', padding: '15px 0', background: 'transparent',
-                                border: 'none', borderBottom: `1px solid ${focused === 'password' ? '#000' : '#ccc'}`,
-                                outline: 'none', color: '#000', marginBottom: '20px'
-                            }}
-                            required
-                        />
-                        <input
-                            type="password"
-                            placeholder="Confirm Password"
-                            value={formData.confirmPassword}
-                            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                            onFocus={() => setFocused('confirm')}
-                            onBlur={() => setFocused('')}
-                            style={{
-                                width: '100%', padding: '15px 0', background: 'transparent',
-                                border: 'none', borderBottom: `1px solid ${focused === 'confirm' ? '#000' : '#ccc'}`,
-                                outline: 'none', color: '#000'
-                            }}
-                            required
-                        />
-                    </div>
+                    {!isGoogleAuth && (
+                        <div style={{ marginBottom: '40px' }}>
+                            <input
+                                type="password"
+                                placeholder="Password"
+                                value={formData.password}
+                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                onFocus={() => setFocused('password')}
+                                onBlur={() => setFocused('')}
+                                style={{
+                                    width: '100%', padding: '15px 0', background: 'transparent',
+                                    border: 'none', borderBottom: `1px solid ${focused === 'password' ? '#000' : '#ccc'}`,
+                                    outline: 'none', color: '#000', marginBottom: '20px'
+                                }}
+                                required
+                            />
+                            <input
+                                type="password"
+                                placeholder="Confirm Password"
+                                value={formData.confirmPassword}
+                                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                onFocus={() => setFocused('confirm')}
+                                onBlur={() => setFocused('')}
+                                style={{
+                                    width: '100%', padding: '15px 0', background: 'transparent',
+                                    border: 'none', borderBottom: `1px solid ${focused === 'confirm' ? '#000' : '#ccc'}`,
+                                    outline: 'none', color: '#000'
+                                }}
+                                required
+                            />
+                        </div>
+                    )}
 
                     <button
                         type="submit"
@@ -248,7 +284,7 @@ const SignupPage = () => {
                             opacity: loading ? 0.7 : 1
                         }}
                     >
-                        {loading ? 'Creating Account...' : 'Create Account'}
+                        {loading ? 'Processing...' : (isGoogleAuth ? 'Complete Profile' : 'Create Account')}
                     </button>
 
                 </form>
