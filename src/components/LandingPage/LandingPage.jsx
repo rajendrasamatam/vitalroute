@@ -4,9 +4,12 @@ import Hero from './Hero';
 import Concept from './Concept';
 import Impact from './Impact';
 import Tech from './Tech';
+import { useNavigate } from 'react-router-dom';
 import Footer from './Footer';
 
 const LandingPage = () => {
+  const navigate = useNavigate();
+
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
@@ -27,7 +30,7 @@ const LandingPage = () => {
     <div className="vital-container">
       <nav className="vital-nav">
         <div className="vital-logo">VITAL ROUTE</div>
-        <button className="vital-login-btn">Login</button>
+        <button className="vital-login-btn" onClick={() => navigate('/login')}>Login</button>
       </nav>
 
       <Hero />
