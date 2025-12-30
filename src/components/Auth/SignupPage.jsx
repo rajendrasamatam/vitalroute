@@ -126,7 +126,7 @@ const SignupPage = () => {
 
             // 4. Navigate to specific dashboard
             const roleRoute = ROLES.find(r => r.id === formData.role)?.route || '/';
-            navigate(roleRoute);
+            navigate(roleRoute, { replace: true });
 
         } catch (err) {
             console.error("Signup Error:", err);

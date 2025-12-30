@@ -99,7 +99,7 @@ const GenericDashboard = ({
 
     const handleMenuClick = (id) => {
         if (id === 'logout') {
-            auth.signOut().then(() => navigate('/'));
+            auth.signOut().then(() => navigate('/', { replace: true }));
         } else {
             setActiveView(id);
         }

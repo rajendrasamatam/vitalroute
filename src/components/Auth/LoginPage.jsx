@@ -43,7 +43,7 @@ const LoginPage = () => {
 
                 // 3. Navigate to specific dashboard
                 const roleRoute = ROLES.find(r => r.id === role)?.route || '/';
-                navigate(roleRoute);
+                navigate(roleRoute, { replace: true });
             } else {
                 // Handle case where user auth exists but firestore doc doesn't (rare sync issue)
                 console.error("No user profile found!");
@@ -71,7 +71,7 @@ const LoginPage = () => {
                 const userData = userDoc.data();
                 const role = userData.role;
                 const roleRoute = ROLES.find(r => r.id === role)?.route || '/';
-                navigate(roleRoute);
+                navigate(roleRoute, { replace: true });
             } else {
                 // User not registered, redirect to signup
                 // Pass email/name state to potentially pre-fill signup (optional enhancement for SignupPage to handle)
