@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
 
 const ROLES = [
     { id: 'admin', label: 'Admin', route: '/dashboard/admin' },
@@ -25,27 +24,6 @@ const LoginPage = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Check if user is already logged in
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // User is signed in, check if they have a profile
-                try {
-                    const userDoc = await getDoc(doc(db, "users", user.uid));
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        const roleRoute = ROLES.find(r => r.id === userData.role)?.route || '/';
-                        // Replace history so they can't "back" into login
-                        navigate(roleRoute, { replace: true });
-                    }
-                } catch (err) {
-                    console.error("Auto-redirect error:", err);
-                }
-            }
-        });
-        return () => unsubscribe();
-    }, [navigate]);
-
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
@@ -65,7 +43,7 @@ const LoginPage = () => {
 
                 // 3. Navigate to specific dashboard
                 const roleRoute = ROLES.find(r => r.id === role)?.route || '/';
-                navigate(roleRoute, { replace: true });
+                navigate(roleRoute);
             } else {
                 // Handle case where user auth exists but firestore doc doesn't (rare sync issue)
                 console.error("No user profile found!");
