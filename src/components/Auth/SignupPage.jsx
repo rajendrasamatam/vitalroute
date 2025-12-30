@@ -34,8 +34,20 @@ const SignupPage = () => {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
+                // Check if user already has a full profile
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+
+                if (userDoc.exists()) {
+                    // User is fully registered, redirect to dashboard
+                    const userData = userDoc.data();
+                    const roleRoute = ROLES.find(r => r.id === userData.role)?.route || '/';
+                    navigate(roleRoute, { replace: true });
+                    return;
+                }
+
+                // If no profile exists, they are in "Profile Completion" mode (likely from Google Auth)
                 setIsGoogleAuth(true);
                 // Only update if not already set (prevents overwriting user input if they typed something)
                 setFormData(prev => ({
@@ -46,7 +58,7 @@ const SignupPage = () => {
             }
         });
         return () => unsubscribe();
-    }, []);
+    }, [navigate]);
 
     const handleFileChange = (e) => {
         if (e.target.files[0]) {
