@@ -97,6 +97,23 @@ const GenericDashboard = ({
         return () => unsubscribeAuth();
     }, [navigate]);
 
+    // STRICT NAVIGATION SECURITY: Prevent Back Button
+    useEffect(() => {
+        // Push a new state to history to create a "trap"
+        window.history.pushState(null, document.title, window.location.href);
+
+        const handlePopState = (event) => {
+            // User pressed back? Push them forward again immediately.
+            window.history.pushState(null, document.title, window.location.href);
+        };
+
+        window.addEventListener('popstate', handlePopState);
+
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, []);
+
     const handleMenuClick = (id) => {
         if (id === 'logout') {
             auth.signOut().then(() => navigate('/', { replace: true }));
