@@ -48,172 +48,210 @@ const StatusBadge = ({ status }) => {
 
 // --- SUB-COMPONENTS ---
 
-const CompassUI = ({ heading, onLock }) => {
-    return (
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-            {/* Minimalist Compass */}
-            <div style={{
-                width: '220px', height: '220px', borderRadius: '50%', border: '8px solid #f0f0f0', margin: '0 auto 25px',
-                position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.05)'
-            }}>
-                {/* Dial marks */}
-                {['N', 'E', 'S', 'W'].map((dir, i) => (
-                    <div key={dir} style={{
-                        position: 'absolute', fontWeight: 'bold', color: i === 0 ? '#e74c3c' : '#bdc3c7',
-                        top: i === 0 ? '10px' : i === 2 ? 'auto' : '50%',
-                        bottom: i === 2 ? '10px' : 'auto',
-                        left: i === 3 ? '15px' : i === 1 ? 'auto' : '50%',
-                        right: i === 1 ? '15px' : 'auto',
-                        transform: i === 0 || i === 2 ? 'translateX(-50%)' : 'translateY(-50%)'
-                    }}>{dir}</div>
-                ))}
-
-                {/* Rotating Indicator */}
-                <div style={{
-                    position: 'absolute', width: '100%', height: '100%',
-                    transform: `rotate(${-heading}deg)`, transition: 'transform 0.1s linear'
+const CompassUI = ({ heading, onLock, location }) => {
+    // Generate tick marks
+    const ticks = [];
+    for (let i = 0; i < 360; i += 2) {
+        const isMajor = i % 30 === 0;
+        const isMedium = i % 10 === 0;
+        ticks.push(
+            <div key={i} style={{
+                position: 'absolute',
+                left: '50%', top: '50%',
+                width: isMajor ? '4px' : isMedium ? '2px' : '1px',
+                height: isMajor ? '20px' : isMedium ? '15px' : '8px',
+                backgroundColor: isMajor ? '#fff' : 'rgba(255,255,255,0.4)',
+                transform: `translate(-50%, -50%) rotate(${i}deg) translateY(-120px)`,
+                transformOrigin: 'center center'
+            }} />
+        );
+        // Add numbers for major ticks
+        if (isMajor) {
+            ticks.push(
+                <div key={`num-${i}`} style={{
+                    position: 'absolute',
+                    left: '50%', top: '50%',
+                    color: '#fff',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    transform: `translate(-50%, -50%) rotate(${i}deg) translateY(-95px) rotate(-${i}deg)`,
+                    transformOrigin: 'center center'
                 }}>
-                    <div style={{
-                        position: 'absolute', top: '25px', left: '50%', transform: 'translateX(-50%)',
-                        width: '0', height: '0', borderLeft: '10px solid transparent', borderRight: '10px solid transparent', borderBottom: '20px solid #2d3436'
-                    }}></div>
+                    {i}
                 </div>
+            );
+        }
+    }
 
-                {/* Center Value */}
-                <div style={{ zIndex: 2, fontSize: '2.5rem', fontWeight: '800', color: '#2d3436' }}>
-                    {heading}°
+    const getCardinal = (deg) => {
+        const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        return directions[Math.round(deg / 45) % 8];
+    };
+
+    return (
+        <div style={{
+            background: '#000', borderRadius: '20px', padding: '30px 20px',
+            color: '#fff', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+            maxWidth: '400px', margin: '0 auto'
+        }}>
+            {/* Top Heading */}
+            <div style={{ marginBottom: '30px' }}>
+                <div style={{ fontSize: '3rem', fontWeight: 'bold', color: '#ff7675' }}>
+                    {heading}° <span style={{ fontSize: '1.5rem', color: '#fff' }}>{getCardinal(heading)}</span>
                 </div>
             </div>
 
-            <p style={{ color: '#636e72', marginBottom: '20px' }}>Align your phone with the traffic light signal direction.</p>
+            {/* Compass Dial */}
+            <div style={{
+                width: '300px', height: '300px', margin: '0 auto 30px',
+                position: 'relative', borderRadius: '50%',
+                background: 'radial-gradient(circle, #2d3436 0%, #000 70%)',
+                boxShadow: 'inset 0 0 20px rgba(0,0,0,1), 0 0 10px rgba(255,255,255,0.1)'
+            }}>
+                {/* Rotating Container */}
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                    transform: `rotate(${-heading}deg)`,
+                    transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)' // CSS Smoothing
+                }}>
+                    {ticks}
 
-            <button onClick={onLock} className="primary-btn">
-                Lock Direction
-            </button>
+                    {/* Cardinal Letters (Fixed to the dial, so they rotate with it) */}
+                    {['N', 'E', 'S', 'W'].map((dir, i) => (
+                        <div key={dir} style={{
+                            position: 'absolute',
+                            left: '50%', top: '50%',
+                            fontSize: '24px', fontWeight: '900',
+                            color: dir === 'N' ? '#ff7675' : '#fff',
+                            transform: `translate(-50%, -50%) rotate(${i * 90}deg) translateY(-60px) rotate(-${i * 90}deg)`,
+                            textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                        }}>
+                            {dir}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Fixed Center Crosshair/Indicator */}
+                <div style={{
+                    position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+                    width: '10px', height: '10px', background: '#fff', borderRadius: '50%',
+                    boxShadow: '0 0 10px #fff'
+                }} />
+                <div style={{
+                    position: 'absolute', left: '50%', top: '20px', transform: 'translateX(-50%)',
+                    width: 0, height: 0,
+                    borderLeft: '10px solid transparent', borderRight: '10px solid transparent',
+                    borderBottom: '20px solid #ff7675', zIndex: 10
+                }} />
+
+            </div>
+
+            {/* Coordinates */}
+            <div style={{
+                display: 'flex', justifyContent: 'space-between', padding: '0 20px',
+                borderTop: '1px solid #636e72', paddingTop: '20px',
+                fontSize: '0.9rem', color: '#b2bec3', fontFamily: 'monospace'
+            }}>
+                <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase' }}>LAT</div>
+                    <div>{location?.lat?.toFixed(6) || '—'}</div>
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase' }}>LNG</div>
+                    <div>{location?.lng?.toFixed(6) || '—'}</div>
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase' }}>ELEV</div>
+                    <div>{location?.alt ? location.alt.toFixed(1) + 'm' : '—'}</div>
+                </div>
+            </div>
+
+            <div style={{ marginTop: '30px' }}>
+                <button onClick={onLock} style={{
+                    background: '#ff7675', color: '#fff', border: 'none',
+                    padding: '15px 40px', borderRadius: '30px',
+                    fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
+                    boxShadow: '0 5px 15px rgba(255, 118, 117, 0.4)'
+                }}>
+                    LOCK DIRECTION
+                </button>
+            </div>
         </div>
     );
 };
 
 const InlineWizard = ({ onCancel, onComplete }) => {
-    // Steps: 1=Scan(includes Location), 2=Compass, 3=Confirm
     const [step, setStep] = useState(1);
     const [scannedId, setScannedId] = useState(null);
     const [location, setLocation] = useState(null);
     const [direction, setDirection] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [scannerActive, setScannerActive] = useState(false); // Controls UI view
-    const [feedback, setFeedback] = useState(null);
+    const [scannerActive, setScannerActive] = useState(false);
     const [errorMessage, setErrorMessage] = useState(null);
     const [isLocating, setIsLocating] = useState(false);
 
-    // Logic to start/stop scanner based on state
+    // --- SCANNER LOGIC ---
     useEffect(() => {
         let scanner = null;
-
         const initScanner = async () => {
-            // Wait a tick to ensure DOM is ready just in case
-            await new Promise(r => setTimeout(r, 100));
-
-            const readerElement = document.getElementById("reader");
-            if (!readerElement) {
-                console.error("Reader element not found");
-                setErrorMessage("Scanner initialization failed. Please try again.");
-                setScannerActive(false);
-                return;
-            }
-
+            await new Promise(r => setTimeout(r, 100)); // DOM wait
+            if (!document.getElementById("reader")) return;
             try {
                 scanner = new Html5Qrcode("reader");
-
                 await scanner.start(
                     { facingMode: "environment" },
                     { fps: 10, qrbox: { width: 250, height: 250 } },
-                    (decodedText) => {
-                        handleScanSuccess(decodedText, scanner);
-                    },
-                    (errorMessage) => {
-                        // ignore
-                    }
+                    (decodedText) => handleScanSuccess(decodedText, scanner),
+                    () => { }
                 );
             } catch (err) {
-                console.error("Error starting scanner", err);
+                console.error("Scanner Error", err);
                 setScannerActive(false);
-
-                let msg = "Failed to access camera.";
-                if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
-                    msg = "Camera permission denied. Please allow camera access in your browser settings and try again.";
-                } else if (err?.name === 'NotFoundError') {
-                    msg = "No camera found on this device.";
-                } else if (err?.name === 'NotReadableError') {
-                    msg = "Camera is already in use by another application.";
-                } else if (typeof err === 'string') {
-                    msg = err;
-                }
-
+                let msg = err?.name === 'NotAllowedError' ? "Camera permission denied." : "Failed to access camera.";
                 setErrorMessage(msg);
             }
         };
-
-        if (scannerActive) {
-            initScanner();
-        }
-
-        // Cleanup on unmount or deps change
-        return () => {
-            if (scanner) {
-                scanner.stop().then(() => scanner.clear()).catch(err => console.log("Stop error", err));
-            }
-        };
+        if (scannerActive) initScanner();
+        return () => { if (scanner) scanner.stop().catch(console.error); };
     }, [scannerActive]);
 
-    const startScanner = () => {
-        setErrorMessage(null);
-        setScannerActive(true);
-    };
-
-    const stopScanner = () => {
+    const handleScanSuccess = (text) => {
+        setScannedId(text);
         setScannerActive(false);
-    };
-
-    const handleScanSuccess = (decodedText, scannerInstance) => {
-        setScannedId(decodedText);
-        setScannerActive(false); // Will trigger cleanup
         captureLocation();
     };
 
     const captureLocation = () => {
         setIsLocating(true);
         if (!navigator.geolocation) {
-            alert("Geolocation not supported");
-            setIsLocating(false);
-            return;
+            alert("Geolocation not supported"); setIsLocating(false); return;
         }
-
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, alt: pos.coords.altitude });
                 setIsLocating(false);
-                setStep(2); // Move to Compass immediately
+                setStep(2);
             },
             (err) => {
-                console.error("Location error:", err);
+                console.error("Location error", err);
                 setIsLocating(false);
-                let msg = "Unable to retrieve location.";
-                if (err.code === 1) msg = "Location permission denied. Please allow location access.";
-                setErrorMessage(msg + " Try refreshing.");
+                setErrorMessage("Location access required. Please allow and retry.");
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     };
 
-    // Compass Logic
+    // --- COMPASS LOGIC (With Smoothing) ---
     const [tempDirection, setTempDirection] = useState(0);
     const [compassPermission, setCompassPermission] = useState('unknown');
+    // Using ref for smoothing to avoid re-render loops with state dependency
+    const headingRef = useRef(0);
 
     useEffect(() => {
         if (step === 2) {
-            // iOS 13+ requires permission for DeviceOrientation
+            headingRef.current = 0; // Reset
+
+            // iOS Permission Check
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 setCompassPermission('required');
             } else {
@@ -221,41 +259,53 @@ const InlineWizard = ({ onCancel, onComplete }) => {
                 startCompassListener();
             }
         }
+        return () => { window.removeEventListener('deviceorientation', handleOrientationWrapper); };
     }, [step]);
 
     const requestCompassPermission = async () => {
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
             try {
-                const permission = await DeviceOrientationEvent.requestPermission();
-                if (permission === 'granted') {
+                const p = await DeviceOrientationEvent.requestPermission();
+                if (p === 'granted') {
                     setCompassPermission('granted');
                     startCompassListener();
-                } else {
-                    alert('Compass permission denied');
-                }
-            } catch (error) {
-                console.error(error);
-                alert("Error requesting compass permission: " + error.message);
-            }
+                } else alert('Permission denied');
+            } catch (e) { alert(e.message); }
         }
     };
 
+    // Wrapper to reference in removeEventListener
+    let handleOrientationWrapper;
+
     const startCompassListener = () => {
-        const handleOrientation = (e) => {
+        handleOrientationWrapper = (e) => {
             let heading = 0;
-            if (e.webkitCompassHeading) {
-                // iOS
-                heading = e.webkitCompassHeading;
-            } else if (e.alpha) {
-                // Android/Others (alpha is not exactly compass heading implies 0=North but it depends on device frame, using approximate)
-                heading = 360 - e.alpha;
-            }
-            // Normalize
+            if (e.webkitCompassHeading) heading = e.webkitCompassHeading;
+            else if (e.alpha) heading = 360 - e.alpha;
+
             if (heading < 0) heading += 360;
-            setTempDirection(Math.round(heading));
+
+            // Low Pass Filter Smoothing
+            // current = prev + alpha * (target - prev)
+            // Handle wrap-around (359 -> 1 should be +2, not -358)
+            let current = headingRef.current;
+            let diff = heading - current;
+
+            // Normalize diff to -180...180
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+
+            const alpha = 0.15; // Smoothing factor (lower = smoother/slower)
+            let smoothHeading = current + (diff * alpha);
+
+            // Normalize result 0...360
+            if (smoothHeading < 0) smoothHeading += 360;
+            smoothHeading = smoothHeading % 360;
+
+            headingRef.current = smoothHeading;
+            setTempDirection(Math.round(smoothHeading));
         };
-        window.addEventListener('deviceorientation', handleOrientation, true);
-        return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+        window.addEventListener('deviceorientation', handleOrientationWrapper, true);
     };
 
     const handleRegister = async () => {
@@ -268,271 +318,161 @@ const InlineWizard = ({ onCancel, onComplete }) => {
                 geoFenceRadius: 500,
                 status: 'working',
                 installedAt: serverTimestamp(),
-                registeredBy: auth.currentUser?.displayName || auth.currentUser?.email || 'Unknown Installer'
+                registeredBy: auth.currentUser?.email || 'Unknown'
             });
             onComplete();
-        } catch (error) {
-            console.error(error);
-            setFeedback('error');
-            setIsSubmitting(false);
-        }
+        } catch (e) { console.error(e); setIsSubmitting(false); }
     };
 
-    // Map View for Confirmation
-    const MapView = ({ center, radius }) => {
-        const SetViewOnClick = ({ coords }) => {
-            const map = useMap();
-            map.setView(coords, map.getZoom());
-            return null;
-        };
+    // MapView
+    const MapView = ({ center }) => {
+        const SetView = ({ c }) => { useMap().setView(c, 16); return null; };
         return (
             <MapContainer center={center} zoom={16} style={{ height: '200px', width: '100%', borderRadius: '12px' }}>
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <Marker position={center} />
-                {radius && <Circle center={center} radius={radius} pathOptions={{ color: '#e74c3c' }} />}
-                <SetViewOnClick coords={center} />
+                <SetView c={center} />
             </MapContainer>
         );
     };
 
     return (
-        <div style={{ animation: 'slideDown 0.3s ease-out', marginBottom: '30px' }}>
-            <div style={{ background: '#fff', border: '1px dashed #ccc', borderRadius: '12px', padding: '30px', textAlign: 'center', position: 'relative' }}>
+        <div style={{ animation: 'slideDown 0.3s ease-out', marginBottom: '30px', width: '100%' }}>
+            <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #eee' }}>
+                {errorMessage && <div style={{ color: 'red', padding: '10px', background: '#ffe6e6', borderRadius: '6px', marginBottom: '10px' }}>{errorMessage}</div>}
 
-                {errorMessage && <div style={{ color: '#721c24', background: '#f8d7da', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>{errorMessage}</div>}
-
-                {/* Step 1: Scan & Location */}
                 {step === 1 && (
-                    <div>
-                        {!scannerActive && !scannedId && !isLocating ? (
-                            <div style={{ padding: '40px 20px' }}>
-                                <p style={{ color: '#666', marginBottom: '20px' }}>Point the camera at a valid QR Code.</p>
-                                <div style={{
-                                    border: '1px solid #eee', borderRadius: '8px', padding: '30px', maxWidth: '400px', margin: '0 auto', background: '#f9f9f9',
-                                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px'
-                                }}>
-                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2d3436" strokeWidth="1.5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                    </svg>
-                                    <div>
-                                        <button onClick={startScanner} style={{ background: '#fff', border: '1px solid #ccc', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: '500', marginRight: '10px' }}>
-                                            Request Camera Permissions
-                                        </button>
-                                        <button disabled style={{ background: 'transparent', border: 'none', textDecoration: 'underline', cursor: 'not-allowed', color: '#999' }}>
-                                            Scan an Image File
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : isLocating ? (
-                            <div style={{ padding: '40px', color: '#6c5ce7' }}>
-                                <div className="spinner" style={{ margin: '0 auto 20px', width: '30px', height: '30px', border: '3px solid #f3f3f3', borderTop: '3px solid #6c5ce7', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                <h3 style={{ margin: 0 }}>Acquiring GPS Location...</h3>
-                                <p>Please stand still under the light.</p>
-                                {/* Fallback button for manual trigger if auto-prompt is blocked */}
-                                <button onClick={captureLocation} style={{ marginTop: '20px', background: 'transparent', border: '1px solid #6c5ce7', color: '#6c5ce7', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>
-                                    Tap to Retry / Allow Permission
+                    <div style={{ textAlign: 'center' }}>
+                        {!scannerActive && !isLocating && !scannedId && (
+                            <div style={{ padding: '20px' }}>
+                                <p style={{ marginBottom: '15px' }}>Scan the Light ID QR Code</p>
+                                <button onClick={() => setScannerActive(true)} style={{ background: '#6c5ce7', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontSize: '1rem' }}>
+                                    Start Scanner
                                 </button>
-                                <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
                             </div>
-                        ) : scannerActive ? (
+                        )}
+                        {isLocating && (
+                            <div style={{ padding: '40px' }}>
+                                <div className="spinner" style={{ width: 30, height: 30, border: '3px solid #eee', borderTopColor: '#6c5ce7', borderRadius: '50%', margin: '0 auto 15px', animation: 'spin 1s linear infinite' }}></div>
+                                <p>Acquiring GPS Location...</p>
+                                <button onClick={captureLocation} style={{ marginTop: '15px', background: 'none', border: '1px solid #6c5ce7', color: '#6c5ce7', padding: '5px 10px', borderRadius: '4px' }}>Retry</button>
+                            </div>
+                        )}
+                        {scannerActive && (
                             <div>
-                                {/* Provide a consistent container for the reader */}
-                                <div id="reader" style={{ maxWidth: '500px', margin: '0 auto', minHeight: '300px', background: '#000' }}></div>
-                                <button onClick={stopScanner} style={{ marginTop: '10px', color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Cancel Scan</button>
+                                <div id="reader" style={{ width: '100%', maxWidth: '400px', margin: '0 auto', minHeight: '300px', background: '#000' }}></div>
+                                <button onClick={() => setScannerActive(false)} style={{ marginTop: '10px', color: '#e74c3c', background: 'none', border: 'none', textDecoration: 'underline' }}>Cancel</button>
                             </div>
-                        ) : null}
+                        )}
+                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                     </div>
                 )}
 
-                {/* Step 2: Compass */}
                 {step === 2 && (
-                    <div>
+                    <div style={{ textAlign: 'center' }}>
                         {compassPermission === 'required' ? (
                             <div style={{ padding: '40px' }}>
-                                <p style={{ marginBottom: '20px', color: '#666' }}>Compass access is required.</p>
-                                <button onClick={requestCompassPermission} className="primary-btn">Allow Compass Access</button>
+                                <p>Compass access required.</p>
+                                <button onClick={requestCompassPermission} style={{ background: '#0984e3', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '6px' }}>Allow Access</button>
                             </div>
                         ) : (
-                            <CompassUI
-                                heading={tempDirection}
-                                onLock={() => { setDirection(tempDirection); setStep(3); }}
-                            />
+                            <CompassUI heading={tempDirection} onLock={() => { setDirection(tempDirection); setStep(3); }} location={location} />
                         )}
                     </div>
                 )}
 
-                {/* Step 3: Confirm */}
                 {step === 3 && (
-                    <div className="step-container">
-                        <h3>Confirm Registration</h3>
-                        <div style={{ margin: '20px auto', maxWidth: '600px', textAlign: 'left' }}>
-                            <MapView center={[location.lat, location.lng]} radius={500} />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '15px' }}>
-                                <div className="info-box"><strong>ID:</strong> {scannedId}</div>
-                                <div className="info-box"><strong>Direction:</strong> {direction}°</div>
-                                <div className="info-box" style={{ gridColumn: 'span 2' }}>
-                                    <strong>GPS:</strong> {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+                    <div style={{ textAlign: 'center' }}>
+                        <h3>Confirm</h3>
+                        <div style={{ margin: '15px 0' }}>
+                            <MapView center={[location.lat, location.lng]} />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px', textAlign: 'left', fontSize: '0.9rem' }}>
+                                <div style={{ background: '#f5f6fa', padding: '10px', borderRadius: '6px' }}><strong>ID:</strong> {scannedId}</div>
+                                <div style={{ background: '#f5f6fa', padding: '10px', borderRadius: '6px' }}><strong>Dir:</strong> {direction}°</div>
+                                <div style={{ background: '#f5f6fa', padding: '10px', borderRadius: '6px', gridColumn: 'span 2' }}>
+                                    <strong>Loc:</strong> {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
                                 </div>
                             </div>
                         </div>
-                        <button onClick={handleRegister} disabled={isSubmitting} className="primary-btn">
+                        <button onClick={handleRegister} disabled={isSubmitting} style={{ background: '#2ecc71', color: 'white', border: 'none', padding: '12px 30px', borderRadius: '8px', fontSize: '1rem', width: '100%', cursor: isSubmitting ? 'wait' : 'pointer' }}>
                             {isSubmitting ? 'Registering...' : 'Complete Registration'}
                         </button>
                     </div>
                 )}
-
             </div>
-            <style>{`
-                @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-                .primary-btn { background: #6c5ce7; color: white; border: none; padding: 10px 24px; borderRadius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem; }
-                .primary-btn:hover { background: #5b4cc4; }
-                .step-container { padding: 20px; }
-                .info-box { background: #f8f9fa; padding: 10px; border-radius: 6px; }
-            `}</style>
         </div>
     );
 };
-
-// --- MAIN COMPONENT ---
 
 const NewInstallations = () => {
     const [isScannerOpen, setScannerOpen] = useState(false);
     const [lights, setLights] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Fetch Data
     useEffect(() => {
         const q = query(collection(db, "signals"), orderBy("installedAt", "desc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => {
-                const d = doc.data();
-                return {
-                    id: doc.id,
-                    ...d,
-                    lat: d.location?.latitude,
-                    lng: d.location?.longitude
-                };
-            });
-            setLights(data);
+            setLights(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), lat: doc.data().location?.latitude, lng: doc.data().location?.longitude })));
             setLoading(false);
         });
         return () => unsubscribe();
     }, []);
 
     return (
-        <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <div style={{ animation: 'fadeIn 0.5s', paddingBottom: '50px' }}>
+            {/* Header - Mobile Responsive Wrapper */}
+            <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
                 <div>
-                    <h1 style={{ fontSize: '2rem', marginBottom: '5px', color: '#2d3436' }}>Manage Streetlights</h1>
-                    <p style={{ color: '#636e72' }}>Scan, search, and manage all lights in the network.</p>
+                    <h1 style={{ fontSize: '1.8rem', margin: 0, color: '#2d3436' }}>Streetlights</h1>
+                    <p style={{ margin: '5px 0 0', color: '#636e72', fontSize: '0.9rem' }}>Manager Dashboard</p>
                 </div>
-
-                {/* Toggle Button */}
-                {!isScannerOpen ? (
-                    <button
-                        onClick={() => setScannerOpen(true)}
-                        style={{
-                            background: '#6c5ce7', color: 'white', border: 'none',
-                            padding: '12px 24px', borderRadius: '8px',
-                            fontWeight: '600', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            boxShadow: '0 4px 6px rgba(108, 92, 231, 0.2)'
-                        }}
-                    >
-                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                        </svg>
-                        Open Scanner
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => setScannerOpen(false)}
-                        style={{
-                            background: '#6c5ce7', color: 'white', border: 'none',
-                            padding: '12px 24px', borderRadius: '8px',
-                            fontWeight: '600', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '8px'
-                        }}
-                    >
-                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        Close Scanner
-                    </button>
-                )}
+                <button
+                    onClick={() => setScannerOpen(!isScannerOpen)}
+                    style={{
+                        background: isScannerOpen ? '#636e72' : '#6c5ce7', color: 'white', border: 'none',
+                        padding: '10px 20px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem',
+                        flexGrow: 0
+                    }}
+                >
+                    {isScannerOpen ? 'Close Scanner' : 'New Installation'}
+                </button>
             </div>
 
-            <h2 style={{ fontSize: '1.2rem', marginBottom: '15px' }}>
-                {isScannerOpen ? 'Register New Light' : 'Registered Lights (' + lights.length + ')'}
-            </h2>
+            {isScannerOpen && <InlineWizard onCancel={() => setScannerOpen(false)} onComplete={() => setScannerOpen(false)} />}
 
-            {/* Inline Wizard */}
-            {isScannerOpen && (
-                <InlineWizard
-                    onCancel={() => setScannerOpen(false)}
-                    onComplete={() => {
-                        setScannerOpen(false);
-                        // optional toast success
-                    }}
-                />
-            )}
-
-            {/* List Card */}
-            <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e0e0e0', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-                {/* Toolbar */}
-                <div style={{ padding: '20px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: 600, color: '#2d3436' }}>Registered Lights ({lights.length})</div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <input
-                            type="text" placeholder="Search by ID..."
-                            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #dfe6e9', background: '#f8f9fa' }}
-                        />
-                        {['All', 'Working', 'Faulty', 'Repairing'].map(status => (
-                            <button key={status} style={{
-                                padding: '6px 16px', borderRadius: '6px', border: '1px solid #dfe6e9',
-                                background: status === 'All' ? '#6c5ce7' : 'white',
-                                color: status === 'All' ? 'white' : '#636e72',
-                                cursor: 'pointer', fontSize: '0.9rem'
-                            }}>
-                                {status}
-                            </button>
-                        ))}
-                    </div>
+            {/* List - Mobile Responsive Scroll */}
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #dfe6e9', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                <div style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                    <span style={{ fontWeight: '600' }}>All Lights ({lights.length})</span>
+                    <input type="text" placeholder="Search..." style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ddd' }} />
                 </div>
-
-                {/* Table */}
                 <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px', fontSize: '0.9rem' }}>
                         <thead>
-                            <tr style={{ background: '#f8f9fa', color: '#b2bec3', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                <th style={{ padding: '15px 20px', textAlign: 'left' }}>ID</th>
-                                <th style={{ padding: '15px 20px', textAlign: 'left' }}>Location</th>
-                                <th style={{ padding: '15px 20px', textAlign: 'left' }}>Status</th>
-                                <th style={{ padding: '15px 20px', textAlign: 'left' }}>Installed On</th>
+                            <tr style={{ background: '#f9f9f9', textAlign: 'left', color: '#636e72' }}>
+                                <th style={{ padding: '12px 15px' }}>ID</th>
+                                <th style={{ padding: '12px 15px' }}>Location</th>
+                                <th style={{ padding: '12px 15px' }}>Status</th>
+                                <th style={{ padding: '12px 15px' }}>Date</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {loading ? (
-                                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center' }}>Loading...</td></tr>
-                            ) : lights.length === 0 ? (
-                                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#aaa' }}>No streetlights registered yet.</td></tr>
-                            ) : (
-                                lights.map((light, index) => (
-                                    <tr key={light.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                                        <td style={{ padding: '15px 20px', fontWeight: 'bold', color: '#6c5ce7' }}>{light.lightId || '—'}</td>
-                                        <td style={{ padding: '15px 20px', color: '#636e72' }}>
-                                            {light.lat ? `${light.lat.toFixed(4)}, ${light.lng.toFixed(4)}` : '—'}
-                                        </td>
-                                        <td style={{ padding: '15px 20px' }}><StatusBadge status={light.status} /></td>
-                                        <td style={{ padding: '15px 20px', color: '#636e72' }}>{formatDate(light.installedAt)}</td>
-                                    </tr>
-                                ))
-                            )}
+                            {loading ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center' }}>Loading...</td></tr> :
+                                lights.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center' }}>No records found.</td></tr> :
+                                    lights.map(l => (
+                                        <tr key={l.id} style={{ borderBottom: '1px solid #f1f1f1' }}>
+                                            <td style={{ padding: '12px 15px', fontWeight: '500', color: '#6c5ce7' }}>{l.lightId}</td>
+                                            <td style={{ padding: '12px 15px' }}>{l.lat?.toFixed(5)}, {l.lng?.toFixed(5)}</td>
+                                            <td style={{ padding: '12px 15px' }}><StatusBadge status={l.status} /></td>
+                                            <td style={{ padding: '12px 15px', color: '#b2bec3' }}>{formatDate(l.installedAt)}</td>
+                                        </tr>
+                                    ))}
                         </tbody>
                     </table>
                 </div>
             </div>
-
-            <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
         </div>
     );
 };
