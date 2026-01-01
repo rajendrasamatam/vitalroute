@@ -292,6 +292,10 @@ const InlineWizard = ({ onCancel, onComplete }) => {
                                 <div className="spinner" style={{ margin: '0 auto 20px', width: '30px', height: '30px', border: '3px solid #f3f3f3', borderTop: '3px solid #6c5ce7', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                                 <h3 style={{ margin: 0 }}>Acquiring GPS Location...</h3>
                                 <p>Please stand still under the light.</p>
+                                {/* Fallback button for manual trigger if auto-prompt is blocked */}
+                                <button onClick={captureLocation} style={{ marginTop: '20px', background: 'transparent', border: '1px solid #6c5ce7', color: '#6c5ce7', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>
+                                    Tap to Retry / Allow Permission
+                                </button>
                                 <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
                             </div>
                         ) : scannerActive ? (
