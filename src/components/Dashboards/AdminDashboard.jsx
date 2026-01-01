@@ -1,7 +1,6 @@
 import React from 'react';
 import GenericDashboard from './GenericDashboard';
 import AdminOverview from './Admin/AdminOverview';
-import AdminSignals from './Admin/AdminSignals';
 import UserManagement from './Admin/UserManagement';
 
 const MENU_ITEMS = [
@@ -25,7 +24,6 @@ const AdminDashboard = () => {
             OverviewComponent={AdminOverview}
             renderCustomContent={(view) => {
                 if (view === 'users') return <UserManagement />;
-                if (view === 'signals') return <AdminSignals />;
                 return null;
             }}
         />
