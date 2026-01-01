@@ -209,22 +209,59 @@ const InlineWizard = ({ onCancel, onComplete }) => {
 
     // Compass Logic
     const [tempDirection, setTempDirection] = useState(0);
+    const [compassPermission, setCompassPermission] = useState('unknown');
+
     useEffect(() => {
         if (step === 2) {
-            const handleOrientation = (e) => {
-                let heading = e.alpha;
-                if (e.webkitCompassHeading) heading = e.webkitCompassHeading;
-                if (heading !== null) setTempDirection(Math.round(heading));
-            };
-            window.addEventListener('deviceorientation', handleOrientation, true);
-            return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+            // iOS 13+ requires permission for DeviceOrientation
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                setCompassPermission('required');
+            } else {
+                setCompassPermission('granted');
+                startCompassListener();
+            }
         }
     }, [step]);
+
+    const requestCompassPermission = async () => {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                const permission = await DeviceOrientationEvent.requestPermission();
+                if (permission === 'granted') {
+                    setCompassPermission('granted');
+                    startCompassListener();
+                } else {
+                    alert('Compass permission denied');
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Error requesting compass permission: " + error.message);
+            }
+        }
+    };
+
+    const startCompassListener = () => {
+        const handleOrientation = (e) => {
+            let heading = 0;
+            if (e.webkitCompassHeading) {
+                // iOS
+                heading = e.webkitCompassHeading;
+            } else if (e.alpha) {
+                // Android/Others (alpha is not exactly compass heading implies 0=North but it depends on device frame, using approximate)
+                heading = 360 - e.alpha;
+            }
+            // Normalize
+            if (heading < 0) heading += 360;
+            setTempDirection(Math.round(heading));
+        };
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+    };
 
     const handleRegister = async () => {
         setIsSubmitting(true);
         try {
-            await addDoc(collection(db, "streetlights"), {
+            await addDoc(collection(db, "signals"), {
                 lightId: scannedId,
                 location: new GeoPoint(location.lat, location.lng),
                 direction: direction,
@@ -310,10 +347,19 @@ const InlineWizard = ({ onCancel, onComplete }) => {
 
                 {/* Step 2: Compass */}
                 {step === 2 && (
-                    <CompassUI
-                        heading={tempDirection}
-                        onLock={() => { setDirection(tempDirection); setStep(3); }}
-                    />
+                    <div>
+                        {compassPermission === 'required' ? (
+                            <div style={{ padding: '40px' }}>
+                                <p style={{ marginBottom: '20px', color: '#666' }}>Compass access is required.</p>
+                                <button onClick={requestCompassPermission} className="primary-btn">Allow Compass Access</button>
+                            </div>
+                        ) : (
+                            <CompassUI
+                                heading={tempDirection}
+                                onLock={() => { setDirection(tempDirection); setStep(3); }}
+                            />
+                        )}
+                    </div>
                 )}
 
                 {/* Step 3: Confirm */}
@@ -357,7 +403,7 @@ const NewInstallations = () => {
 
     // Fetch Data
     useEffect(() => {
-        const q = query(collection(db, "streetlights"), orderBy("installedAt", "desc"));
+        const q = query(collection(db, "signals"), orderBy("installedAt", "desc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => {
                 const d = doc.data();
