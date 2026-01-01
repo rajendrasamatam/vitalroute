@@ -11,6 +11,8 @@ const MENU_ITEMS = [
     { id: 'diagnostics', label: 'Signal Diagnostics' },
 ];
 
+import NewInstallations from './NewInstallations';
+
 const InstallerOverview = () => (
     <div style={{ animation: 'fadeIn 0.6s ease-out' }}>
         <div style={{ marginBottom: '40px' }}>
@@ -32,6 +34,13 @@ const InstallerOverview = () => (
 );
 
 const TrafficInstallerDashboard = () => {
+    const renderCustomContent = (viewId) => {
+        if (viewId === 'installations') {
+            return <NewInstallations />;
+        }
+        return null; // Fallback to default behavior
+    };
+
     return (
         <GenericDashboard
             roleTitle="INSTALLER UNIT"
@@ -39,6 +48,7 @@ const TrafficInstallerDashboard = () => {
             menuItems={MENU_ITEMS}
             OverviewComponent={InstallerOverview}
             statusColor="#f39c12"
+            renderCustomContent={renderCustomContent}
         />
     );
 };
