@@ -81,7 +81,6 @@ const StepScanner = ({ onScan }) => {
                             })
                             .catch(err => {
                                 console.warn("Stop failed on success", err);
-                                // Try to proceed even if stop fails
                                 scanner.clear();
                                 onScan(decodedText);
                             });
@@ -173,25 +172,39 @@ const StepCompass = ({ onConfirm }) => {
             setPermission('required');
         } else {
             setPermission('granted');
-            startListener();
+            const start = () => {
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
+            };
+            start();
         }
     }, []);
 
-    const startListener = () => {
-        window.addEventListener('deviceorientation', handleOrientation, true);
-    };
-
     const handleOrientation = useCallback((e) => {
-        let h = 0;
-        if (e.webkitCompassHeading) h = e.webkitCompassHeading;
-        else if (e.alpha) h = 360 - e.alpha;
+        let compassHeading = 0;
 
-        if (h < 0) h += 360;
-        setHeading(Math.round(h));
+        if (e.webkitCompassHeading) {
+            // iOS
+            compassHeading = e.webkitCompassHeading;
+        } else if (e.absolute && e.alpha !== null) {
+            // Android Absolute
+            compassHeading = 360 - e.alpha;
+        } else if (e.alpha !== null) {
+            // Fallback
+            compassHeading = 360 - e.alpha;
+        }
+
+        if (compassHeading < 0) compassHeading += 360;
+        if (compassHeading >= 360) compassHeading -= 360;
+
+        setHeading(Math.round(compassHeading));
     }, []);
 
     useEffect(() => {
-        return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+        return () => {
+            window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+            window.removeEventListener('deviceorientation', handleOrientation, true);
+        };
     }, [handleOrientation]);
 
     const requestPermission = async () => {
@@ -199,40 +212,70 @@ const StepCompass = ({ onConfirm }) => {
             const resp = await DeviceOrientationEvent.requestPermission();
             if (resp === 'granted') {
                 setPermission('granted');
-                startListener();
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+                window.addEventListener('deviceorientation', handleOrientation, true);
             } else {
                 setPermission('denied');
+                alert("Compass permission is required.");
             }
         } catch (e) {
-            console.log(e);
+            console.error(e);
+            alert("Error: " + e.message);
         }
     };
 
     return (
         <div style={{ textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <h3 style={{ marginBottom: '10px' }}>Align Direction</h3>
-            <p style={{ color: '#666', marginBottom: '30px' }}>Face the traffic light signal direction.</p>
+
+            <div style={{ background: '#e3f2fd', padding: '15px', borderRadius: '8px', marginBottom: '30px', maxWidth: '300px' }}>
+                <p style={{ margin: 0, fontWeight: '500', color: '#0d47a1', fontSize: '0.9rem' }}>
+                    1. Hold phone <b>upright</b> (vertical).<br />
+                    2. Face the <b>traffic light</b> directly.
+                </p>
+            </div>
 
             {permission === 'required' ? (
-                <button onClick={requestPermission} style={{ padding: '10px 20px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '8px' }}>
+                <button
+                    onClick={requestPermission}
+                    style={{ padding: '16px 24px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold' }}
+                >
                     Allow Compass Access
                 </button>
             ) : (
                 <>
                     <div style={{
-                        width: '200px', height: '200px', borderRadius: '50%', border: '10px solid #f0f0f0',
+                        width: '240px', height: '240px', borderRadius: '50%', border: '12px solid #f0f0f0',
                         position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '40px',
-                        transform: `rotate(${-heading}deg)`, transition: 'transform 0.1s ease-out'
+                        background: 'white', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.05)'
                     }}>
-                        <div style={{ position: 'absolute', top: '-15px', padding: '5px 10px', background: '#2d3436', color: 'white', borderRadius: '4px', fontWeight: 'bold' }}>N</div>
-                        <div style={{ width: '0', height: '0', borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderBottom: '30px solid #e74c3c', transform: 'translateY(-10px)' }}></div>
-                    </div>
+                        {['N', 'E', 'S', 'W'].map((d, i) => (
+                            <span key={d} style={{
+                                position: 'absolute', fontWeight: 'bold', color: '#b2bec3',
+                                top: i === 0 ? '10px' : i === 2 ? 'auto' : '50%', bottom: i === 2 ? '10px' : 'auto',
+                                left: i === 3 ? '15px' : i === 1 ? 'auto' : '50%', right: i === 1 ? '15px' : 'auto',
+                                transform: 'translate(-50%, -50%)'
+                            }}>{d}</span>
+                        ))}
 
-                    <div style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '20px' }}>{heading}°</div>
+                        <div style={{
+                            width: '100%', height: '100%', position: 'absolute',
+                            transform: `rotate(${-heading}deg)`, transition: 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)'
+                        }}>
+                            <div style={{
+                                width: '0', height: '0',
+                                borderLeft: '20px solid transparent', borderRight: '20px solid transparent', borderBottom: '40px solid #e74c3c',
+                                position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)',
+                                filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))'
+                            }}></div>
+                        </div>
+
+                        <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#2d3436', zIndex: 2 }}>{heading}°</div>
+                    </div>
 
                     <button
                         onClick={() => onConfirm(heading)}
-                        style={{ width: '100%', padding: '16px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '600' }}
+                        style={{ width: '100%', padding: '16px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.2rem', fontWeight: '600', boxShadow: '0 4px 15px rgba(108, 92, 231, 0.3)' }}
                     >
                         Confirm Direction
                     </button>
@@ -327,7 +370,6 @@ const NewInstallations = () => {
         setView('wizard');
     }, []);
 
-    // WRAP IN USECALLBACK to avoid re-creating on every render -> stabilizes onScan prop
     const handleStep1Scan = useCallback((code) => {
         setInstallData(prev => ({ ...prev, serialNumber: code }));
         setStep(2);
