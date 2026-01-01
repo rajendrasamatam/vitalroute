@@ -1,22 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
-import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db, auth } from '../../firebase';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, GeoPoint } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, GeoPoint } from 'firebase/firestore';
+import { Html5Qrcode } from 'html5-qrcode';
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix for default Leaflet marker icons in React
+// Fix for Leaflet icons
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
 let DefaultIcon = L.icon({
     iconUrl: icon,
     shadowUrl: iconShadow,
     iconSize: [25, 41],
     iconAnchor: [12, 41]
 });
-
 L.Marker.prototype.options.icon = DefaultIcon;
 
 // --- UTILS ---
@@ -36,443 +34,395 @@ const StatusBadge = ({ status }) => {
 
     return (
         <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '4px 12px', borderRadius: '20px',
-            background: bg, color: color, fontSize: '0.85rem', fontWeight: '500', textTransform: 'capitalize'
+            display: 'inline-flex', alignItems: 'center',
+            padding: '4px 10px', borderRadius: '12px',
+            background: bg, color: color, fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase'
         }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color }}></span>
             {label}
         </span>
     );
 };
 
-// --- SUB-COMPONENTS ---
+// --- SUB-COMPONENTS for Wizard ---
 
-const CompassUI = ({ heading, onLock, location }) => {
-    // Generate tick marks
-    const ticks = [];
-    for (let i = 0; i < 360; i += 2) {
-        const isMajor = i % 30 === 0;
-        const isMedium = i % 10 === 0;
-        ticks.push(
-            <div key={i} style={{
-                position: 'absolute',
-                left: '50%', top: '50%',
-                width: isMajor ? '4px' : isMedium ? '2px' : '1px',
-                height: isMajor ? '20px' : isMedium ? '15px' : '8px',
-                backgroundColor: isMajor ? '#fff' : 'rgba(255,255,255,0.4)',
-                transform: `translate(-50%, -50%) rotate(${i}deg) translateY(-120px)`,
-                transformOrigin: 'center center'
-            }} />
-        );
-        // Add numbers for major ticks
-        if (isMajor) {
-            ticks.push(
-                <div key={`num-${i}`} style={{
-                    position: 'absolute',
-                    left: '50%', top: '50%',
-                    color: '#fff',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    transform: `translate(-50%, -50%) rotate(${i}deg) translateY(-95px) rotate(-${i}deg)`,
-                    transformOrigin: 'center center'
-                }}>
-                    {i}
-                </div>
-            );
-        }
-    }
-
-    const getCardinal = (deg) => {
-        const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-        return directions[Math.round(deg / 45) % 8];
-    };
-
-    return (
-        <div style={{
-            background: '#000', borderRadius: '20px', padding: '30px 20px',
-            color: '#fff', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-            maxWidth: '400px', margin: '0 auto'
-        }}>
-            {/* Top Heading */}
-            <div style={{ marginBottom: '30px' }}>
-                <div style={{ fontSize: '3rem', fontWeight: 'bold', color: '#ff7675' }}>
-                    {heading}° <span style={{ fontSize: '1.5rem', color: '#fff' }}>{getCardinal(heading)}</span>
-                </div>
-            </div>
-
-            {/* Compass Dial */}
-            <div style={{
-                width: '300px', height: '300px', margin: '0 auto 30px',
-                position: 'relative', borderRadius: '50%',
-                background: 'radial-gradient(circle, #2d3436 0%, #000 70%)',
-                boxShadow: 'inset 0 0 20px rgba(0,0,0,1), 0 0 10px rgba(255,255,255,0.1)'
-            }}>
-                {/* Rotating Container */}
-                <div style={{
-                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                    transform: `rotate(${-heading}deg)`,
-                    transition: 'transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1)' // CSS Smoothing
-                }}>
-                    {ticks}
-
-                    {/* Cardinal Letters (Fixed to the dial, so they rotate with it) */}
-                    {['N', 'E', 'S', 'W'].map((dir, i) => (
-                        <div key={dir} style={{
-                            position: 'absolute',
-                            left: '50%', top: '50%',
-                            fontSize: '24px', fontWeight: '900',
-                            color: dir === 'N' ? '#ff7675' : '#fff',
-                            transform: `translate(-50%, -50%) rotate(${i * 90}deg) translateY(-60px) rotate(-${i * 90}deg)`,
-                            textShadow: '0 2px 4px rgba(0,0,0,0.8)'
-                        }}>
-                            {dir}
-                        </div>
-                    ))}
-                </div>
-
-                {/* Fixed Center Crosshair/Indicator */}
-                <div style={{
-                    position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-                    width: '10px', height: '10px', background: '#fff', borderRadius: '50%',
-                    boxShadow: '0 0 10px #fff'
-                }} />
-                <div style={{
-                    position: 'absolute', left: '50%', top: '20px', transform: 'translateX(-50%)',
-                    width: 0, height: 0,
-                    borderLeft: '10px solid transparent', borderRight: '10px solid transparent',
-                    borderBottom: '20px solid #ff7675', zIndex: 10
-                }} />
-
-            </div>
-
-            {/* Coordinates */}
-            <div style={{
-                display: 'flex', justifyContent: 'space-between', padding: '0 20px',
-                borderTop: '1px solid #636e72', paddingTop: '20px',
-                fontSize: '0.9rem', color: '#b2bec3', fontFamily: 'monospace'
-            }}>
-                <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase' }}>LAT</div>
-                    <div>{location?.lat?.toFixed(6) || '—'}</div>
-                </div>
-                <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase' }}>LNG</div>
-                    <div>{location?.lng?.toFixed(6) || '—'}</div>
-                </div>
-                <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase' }}>ELEV</div>
-                    <div>{location?.alt ? location.alt.toFixed(1) + 'm' : '—'}</div>
-                </div>
-            </div>
-
-            <div style={{ marginTop: '30px' }}>
-                <button onClick={onLock} style={{
-                    background: '#ff7675', color: '#fff', border: 'none',
-                    padding: '15px 40px', borderRadius: '30px',
-                    fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
-                    boxShadow: '0 5px 15px rgba(255, 118, 117, 0.4)'
-                }}>
-                    LOCK DIRECTION
-                </button>
-            </div>
-        </div>
-    );
-};
-
-const InlineWizard = ({ onCancel, onComplete }) => {
-    const [step, setStep] = useState(1);
-    const [scannedId, setScannedId] = useState(null);
-    const [location, setLocation] = useState(null);
-    const [direction, setDirection] = useState(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [scannerActive, setScannerActive] = useState(false);
-    const [errorMessage, setErrorMessage] = useState(null);
-    const [isLocating, setIsLocating] = useState(false);
-
-    // --- SCANNER LOGIC ---
-    useEffect(() => {
-        let scanner = null;
-        const initScanner = async () => {
-            await new Promise(r => setTimeout(r, 100)); // DOM wait
-            if (!document.getElementById("reader")) return;
-            try {
-                scanner = new Html5Qrcode("reader");
-                await scanner.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    (decodedText) => handleScanSuccess(decodedText, scanner),
-                    () => { }
-                );
-            } catch (err) {
-                console.error("Scanner Error", err);
-                setScannerActive(false);
-                let msg = err?.name === 'NotAllowedError' ? "Camera permission denied." : "Failed to access camera.";
-                setErrorMessage(msg);
-            }
-        };
-        if (scannerActive) initScanner();
-        return () => { if (scanner) scanner.stop().catch(console.error); };
-    }, [scannerActive]);
-
-    const handleScanSuccess = (text) => {
-        setScannedId(text);
-        setScannerActive(false);
-        captureLocation();
-    };
-
-    const captureLocation = () => {
-        setIsLocating(true);
-        if (!navigator.geolocation) {
-            alert("Geolocation not supported"); setIsLocating(false); return;
-        }
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, alt: pos.coords.altitude });
-                setIsLocating(false);
-                setStep(2);
-            },
-            (err) => {
-                console.error("Location error", err);
-                setIsLocating(false);
-                setErrorMessage("Location access required. Please allow and retry.");
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    };
-
-    // --- COMPASS LOGIC (With Smoothing) ---
-    const [tempDirection, setTempDirection] = useState(0);
-    const [compassPermission, setCompassPermission] = useState('unknown');
-    // Using ref for smoothing to avoid re-render loops with state dependency
-    const headingRef = useRef(0);
+// Step 1: Scanner
+const StepScanner = ({ onScan }) => {
+    const [error, setError] = useState(null);
+    const scannerRef = useRef(null);
+    const isRunningRef = useRef(false);
 
     useEffect(() => {
-        if (step === 2) {
-            headingRef.current = 0; // Reset
-
-            // iOS Permission Check
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                setCompassPermission('required');
-            } else {
-                setCompassPermission('granted');
-                startCompassListener();
-            }
-        }
-        return () => { window.removeEventListener('deviceorientation', handleOrientationWrapper); };
-    }, [step]);
-
-    const requestCompassPermission = async () => {
-        if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+        // Cleanup previous instance if exists (safety)
+        if (scannerRef.current) {
             try {
-                const p = await DeviceOrientationEvent.requestPermission();
-                if (p === 'granted') {
-                    setCompassPermission('granted');
-                    startCompassListener();
-                } else alert('Permission denied');
-            } catch (e) { alert(e.message); }
+                if (isRunningRef.current) {
+                    scannerRef.current.stop().catch(() => { });
+                }
+                scannerRef.current.clear();
+            } catch (e) { }
         }
-    };
 
-    // Wrapper to reference in removeEventListener
-    let handleOrientationWrapper;
+        const scanner = new Html5Qrcode("reader");
+        scannerRef.current = scanner;
 
-    const startCompassListener = () => {
-        handleOrientationWrapper = (e) => {
-            let heading = 0;
-            if (e.webkitCompassHeading) heading = e.webkitCompassHeading;
-            else if (e.alpha) heading = 360 - e.alpha;
-
-            if (heading < 0) heading += 360;
-
-            // Low Pass Filter Smoothing
-            // current = prev + alpha * (target - prev)
-            // Handle wrap-around (359 -> 1 should be +2, not -358)
-            let current = headingRef.current;
-            let diff = heading - current;
-
-            // Normalize diff to -180...180
-            if (diff > 180) diff -= 360;
-            if (diff < -180) diff += 360;
-
-            const alpha = 0.15; // Smoothing factor (lower = smoother/slower)
-            let smoothHeading = current + (diff * alpha);
-
-            // Normalize result 0...360
-            if (smoothHeading < 0) smoothHeading += 360;
-            smoothHeading = smoothHeading % 360;
-
-            headingRef.current = smoothHeading;
-            setTempDirection(Math.round(smoothHeading));
-        };
-        window.addEventListener('deviceorientation', handleOrientationWrapper, true);
-    };
-
-    const handleRegister = async () => {
-        setIsSubmitting(true);
-        try {
-            await addDoc(collection(db, "signals"), {
-                lightId: scannedId,
-                location: new GeoPoint(location.lat, location.lng),
-                direction: direction,
-                geoFenceRadius: 500,
-                status: 'working',
-                installedAt: serverTimestamp(),
-                registeredBy: auth.currentUser?.email || 'Unknown'
+        // Small delay to ensure DOM is painted
+        const timer = setTimeout(() => {
+            scanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                    // Success callback
+                    if (isRunningRef.current) {
+                        isRunningRef.current = false;
+                        scanner.stop()
+                            .then(() => {
+                                scanner.clear();
+                                onScan(decodedText);
+                            })
+                            .catch(err => {
+                                console.warn("Stop failed on success", err);
+                                // Try to proceed even if stop fails
+                                scanner.clear();
+                                onScan(decodedText);
+                            });
+                    }
+                },
+                (err) => {
+                    // Ignore frame parse errors
+                }
+            ).then(() => {
+                isRunningRef.current = true;
+            }).catch(err => {
+                console.error("Scanner start error", err);
+                // Only show error if we are still mounted
+                setError("Camera access denied or unavailable.");
             });
-            onComplete();
-        } catch (e) { console.error(e); setIsSubmitting(false); }
-    };
+        }, 100);
 
-    // MapView
-    const MapView = ({ center }) => {
-        const SetView = ({ c }) => { useMap().setView(c, 16); return null; };
-        return (
-            <MapContainer center={center} zoom={16} style={{ height: '200px', width: '100%', borderRadius: '12px' }}>
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <Marker position={center} />
-                <SetView c={center} />
-            </MapContainer>
-        );
-    };
+        return () => {
+            clearTimeout(timer);
+            if (scanner && isRunningRef.current) {
+                isRunningRef.current = false;
+                scanner.stop().then(() => scanner.clear()).catch(err => console.warn("Unmount stop error", err));
+            } else if (scanner) {
+                try { scanner.clear(); } catch (e) { }
+            }
+        };
+    }, [onScan]);
 
     return (
-        <div style={{ animation: 'slideDown 0.3s ease-out', marginBottom: '30px', width: '100%' }}>
-            <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #eee' }}>
-                {errorMessage && <div style={{ color: 'red', padding: '10px', background: '#ffe6e6', borderRadius: '6px', marginBottom: '10px' }}>{errorMessage}</div>}
-
-                {step === 1 && (
-                    <div style={{ textAlign: 'center' }}>
-                        {!scannerActive && !isLocating && !scannedId && (
-                            <div style={{ padding: '20px' }}>
-                                <p style={{ marginBottom: '15px' }}>Scan the Light ID QR Code</p>
-                                <button onClick={() => setScannerActive(true)} style={{ background: '#6c5ce7', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontSize: '1rem' }}>
-                                    Start Scanner
-                                </button>
-                            </div>
-                        )}
-                        {isLocating && (
-                            <div style={{ padding: '40px' }}>
-                                <div className="spinner" style={{ width: 30, height: 30, border: '3px solid #eee', borderTopColor: '#6c5ce7', borderRadius: '50%', margin: '0 auto 15px', animation: 'spin 1s linear infinite' }}></div>
-                                <p>Acquiring GPS Location...</p>
-                                <button onClick={captureLocation} style={{ marginTop: '15px', background: 'none', border: '1px solid #6c5ce7', color: '#6c5ce7', padding: '5px 10px', borderRadius: '4px' }}>Retry</button>
-                            </div>
-                        )}
-                        {scannerActive && (
-                            <div>
-                                <div id="reader" style={{ width: '100%', maxWidth: '400px', margin: '0 auto', minHeight: '300px', background: '#000' }}></div>
-                                <button onClick={() => setScannerActive(false)} style={{ marginTop: '10px', color: '#e74c3c', background: 'none', border: 'none', textDecoration: 'underline' }}>Cancel</button>
-                            </div>
-                        )}
-                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                    </div>
-                )}
-
-                {step === 2 && (
-                    <div style={{ textAlign: 'center' }}>
-                        {compassPermission === 'required' ? (
-                            <div style={{ padding: '40px' }}>
-                                <p>Compass access required.</p>
-                                <button onClick={requestCompassPermission} style={{ background: '#0984e3', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '6px' }}>Allow Access</button>
-                            </div>
-                        ) : (
-                            <CompassUI heading={tempDirection} onLock={() => { setDirection(tempDirection); setStep(3); }} location={location} />
-                        )}
-                    </div>
-                )}
-
-                {step === 3 && (
-                    <div style={{ textAlign: 'center' }}>
-                        <h3>Confirm</h3>
-                        <div style={{ margin: '15px 0' }}>
-                            <MapView center={[location.lat, location.lng]} />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px', textAlign: 'left', fontSize: '0.9rem' }}>
-                                <div style={{ background: '#f5f6fa', padding: '10px', borderRadius: '6px' }}><strong>ID:</strong> {scannedId}</div>
-                                <div style={{ background: '#f5f6fa', padding: '10px', borderRadius: '6px' }}><strong>Dir:</strong> {direction}°</div>
-                                <div style={{ background: '#f5f6fa', padding: '10px', borderRadius: '6px', gridColumn: 'span 2' }}>
-                                    <strong>Loc:</strong> {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
-                                </div>
-                            </div>
-                        </div>
-                        <button onClick={handleRegister} disabled={isSubmitting} style={{ background: '#2ecc71', color: 'white', border: 'none', padding: '12px 30px', borderRadius: '8px', fontSize: '1rem', width: '100%', cursor: isSubmitting ? 'wait' : 'pointer' }}>
-                            {isSubmitting ? 'Registering...' : 'Complete Registration'}
-                        </button>
-                    </div>
-                )}
-            </div>
+        <div style={{ textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ marginBottom: '20px' }}>Scan Signal QR</h3>
+            {error ? (
+                <div style={{ color: 'red', padding: '20px', background: '#ffe6e6', borderRadius: '8px' }}>
+                    {error} <br /> <button onClick={() => window.location.reload()} style={{ marginTop: '10px' }}>Retry</button>
+                </div>
+            ) : (
+                <div id="reader" style={{ width: '100%', maxWidth: '400px', margin: '0 auto', flex: 1, borderRadius: '12px', overflow: 'hidden', background: '#000' }}></div>
+            )}
+            <p style={{ marginTop: '20px', color: '#666' }}>Point camera at the QR code on the traffic light chassis.</p>
         </div>
     );
 };
+
+// Step 2: Location
+const StepLocation = ({ onLocationFound }) => {
+    const [status, setStatus] = useState('Acquiring GPS Signal...');
+
+    useEffect(() => {
+        if (!navigator.geolocation) {
+            setStatus("Geolocation not supported on this device.");
+            return;
+        }
+
+        const success = (pos) => {
+            setStatus("Location Locked!");
+            setTimeout(() => {
+                onLocationFound(pos.coords);
+            }, 1000); // 1s delay to show success
+        };
+
+        const error = (err) => {
+            setStatus("Failed to get location: " + err.message);
+        };
+
+        navigator.geolocation.getCurrentPosition(success, error, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        });
+    }, [onLocationFound]);
+
+    return (
+        <div style={{ textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '60px', height: '60px', borderRadius: '50%', border: '4px solid #f3f3f3', borderTop: '4px solid #6c5ce7', animation: 'spin 1s linear infinite', marginBottom: '20px' }}></div>
+            <h3>{status}</h3>
+            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        </div>
+    );
+};
+
+// Step 3: Compass
+const StepCompass = ({ onConfirm }) => {
+    const [heading, setHeading] = useState(0);
+    const [permission, setPermission] = useState('unknown'); // unknown, required, granted, denied
+
+    useEffect(() => {
+        // iOS Check
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            setPermission('required');
+        } else {
+            setPermission('granted');
+            startListener();
+        }
+    }, []);
+
+    const startListener = () => {
+        window.addEventListener('deviceorientation', handleOrientation, true);
+    };
+
+    const handleOrientation = useCallback((e) => {
+        let h = 0;
+        if (e.webkitCompassHeading) h = e.webkitCompassHeading;
+        else if (e.alpha) h = 360 - e.alpha;
+
+        if (h < 0) h += 360;
+        setHeading(Math.round(h));
+    }, []);
+
+    useEffect(() => {
+        return () => window.removeEventListener('deviceorientation', handleOrientation, true);
+    }, [handleOrientation]);
+
+    const requestPermission = async () => {
+        try {
+            const resp = await DeviceOrientationEvent.requestPermission();
+            if (resp === 'granted') {
+                setPermission('granted');
+                startListener();
+            } else {
+                setPermission('denied');
+            }
+        } catch (e) {
+            console.log(e);
+        }
+    };
+
+    return (
+        <div style={{ textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <h3 style={{ marginBottom: '10px' }}>Align Direction</h3>
+            <p style={{ color: '#666', marginBottom: '30px' }}>Face the traffic light signal direction.</p>
+
+            {permission === 'required' ? (
+                <button onClick={requestPermission} style={{ padding: '10px 20px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '8px' }}>
+                    Allow Compass Access
+                </button>
+            ) : (
+                <>
+                    <div style={{
+                        width: '200px', height: '200px', borderRadius: '50%', border: '10px solid #f0f0f0',
+                        position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '40px',
+                        transform: `rotate(${-heading}deg)`, transition: 'transform 0.1s ease-out'
+                    }}>
+                        <div style={{ position: 'absolute', top: '-15px', padding: '5px 10px', background: '#2d3436', color: 'white', borderRadius: '4px', fontWeight: 'bold' }}>N</div>
+                        <div style={{ width: '0', height: '0', borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderBottom: '30px solid #e74c3c', transform: 'translateY(-10px)' }}></div>
+                    </div>
+
+                    <div style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '20px' }}>{heading}°</div>
+
+                    <button
+                        onClick={() => onConfirm(heading)}
+                        style={{ width: '100%', padding: '16px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '600' }}
+                    >
+                        Confirm Direction
+                    </button>
+                </>
+            )}
+        </div>
+    );
+};
+
+// Step 4: Review
+const StepReview = ({ data, onComplete }) => {
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <h3>Review Installation</h3>
+            <div style={{ background: '#f8f9fa', borderRadius: '12px', padding: '20px', margin: '20px 0', flex: 1 }}>
+                <div style={{ marginBottom: '15px' }}>
+                    <small style={{ color: '#999', textTransform: 'uppercase' }}>Serial Number</small>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#2d3436' }}>{data.serialNumber}</div>
+                </div>
+                <div style={{ marginBottom: '15px' }}>
+                    <small style={{ color: '#999', textTransform: 'uppercase' }}>Direction</small>
+                    <div style={{ fontSize: '1.2rem' }}>{data.direction}°</div>
+                </div>
+                <div>
+                    <small style={{ color: '#999', textTransform: 'uppercase' }}>Location</small>
+                    <div style={{ fontSize: '1.1rem' }}>{data.location?.latitude.toFixed(6)}, {data.location?.longitude.toFixed(6)}</div>
+                </div>
+            </div>
+            <button
+                onClick={onComplete}
+                style={{ width: '100%', padding: '16px', background: '#27ae60', color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '600', boxShadow: '0 4px 12px rgba(46, 204, 113, 0.3)' }}
+            >
+                Complete Installation
+            </button>
+        </div>
+    );
+};
+
+// Step 5: Success
+const StepSuccess = ({ onFinish }) => (
+    <div style={{ textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#2ecc71', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
+            <svg width="40" height="40" fill="none" stroke="white" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+        </div>
+        <h2 style={{ marginBottom: '10px' }}>Installation Complete!</h2>
+        <p style={{ color: '#666', marginBottom: '40px' }}>The signal has been registered successfully.</p>
+        <button
+            onClick={onFinish}
+            style={{ width: '100%', padding: '16px', background: '#f0f0f0', color: '#2d3436', border: 'none', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '600' }}
+        >
+            Done
+        </button>
+    </div>
+);
+
+const SignalCard = ({ data }) => (
+    <div style={{ background: 'white', borderRadius: '12px', padding: '16px', marginBottom: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #f0f0f0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#2d3436' }}>{data.lightId || 'Unknown ID'}</span>
+            <StatusBadge status={data.status} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', color: '#636e72' }}>
+            <span>{data.location ? `${data.location.latitude.toFixed(4)}, ${data.location.longitude.toFixed(4)}` : 'No Location'}</span>
+            <span>{formatDate(data.installedAt)}</span>
+        </div>
+    </div>
+);
+
+// --- MAIN COMPONENT ---
 
 const NewInstallations = () => {
-    const [isScannerOpen, setScannerOpen] = useState(false);
-    const [lights, setLights] = useState([]);
+    const [view, setView] = useState('list'); // 'list' | 'wizard'
+    const [step, setStep] = useState(1);
+    const [signals, setSignals] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [installData, setInstallData] = useState({}); // { serialNumber, location, direction }
 
+    // Fetch Data
     useEffect(() => {
         const q = query(collection(db, "signals"), orderBy("installedAt", "desc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            setLights(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), lat: doc.data().location?.latitude, lng: doc.data().location?.longitude })));
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setSignals(data);
             setLoading(false);
         });
         return () => unsubscribe();
     }, []);
 
+    const startInstallation = useCallback(() => {
+        setInstallData({});
+        setStep(1);
+        setView('wizard');
+    }, []);
+
+    // WRAP IN USECALLBACK to avoid re-creating on every render -> stabilizes onScan prop
+    const handleStep1Scan = useCallback((code) => {
+        setInstallData(prev => ({ ...prev, serialNumber: code }));
+        setStep(2);
+    }, []);
+
+    const handleStep2Location = useCallback((coords) => {
+        setInstallData(prev => ({ ...prev, location: { latitude: coords.latitude, longitude: coords.longitude } }));
+        setStep(3);
+    }, []);
+
+    const handleStep3Compass = useCallback((heading) => {
+        setInstallData(prev => ({ ...prev, direction: heading }));
+        setStep(4);
+    }, []);
+
+    const handleStep4Complete = useCallback(async () => {
+        try {
+            await addDoc(collection(db, "signals"), {
+                lightId: installData.serialNumber,
+                location: new GeoPoint(installData.location.latitude, installData.location.longitude),
+                direction: installData.direction,
+                status: 'working',
+                geoFenceRadius: 500,
+                installedAt: serverTimestamp(),
+                registeredBy: auth.currentUser?.email || 'Unknown'
+            });
+            setStep(5);
+        } catch (error) {
+            console.error(error);
+            alert("Save failed: " + error.message);
+        }
+    }, [installData]);
+
+    const handleFinish = useCallback(() => {
+        setView('list');
+    }, []);
+
+    const cancelWizard = useCallback(() => {
+        if (window.confirm("Cancel installation?")) {
+            setView('list');
+        }
+    }, []);
+
+    // --- VIEW: LIST ---
+    const ListView = () => (
+        <div className="mobile-container">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2 style={{ fontSize: '1.5rem', margin: 0, color: '#2d3436' }}>Manage Signals</h2>
+                <div style={{ width: '32px', height: '32px', background: '#dfe6e9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '1rem' }}>🛠️</span>
+                </div>
+            </div>
+            <button
+                onClick={startInstallation}
+                style={{ width: '100%', background: '#6c5ce7', color: 'white', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '25px', boxShadow: '0 4px 12px rgba(108, 92, 231, 0.3)', cursor: 'pointer' }}
+            >
+                <span style={{ fontSize: '1.2rem' }}>+</span> Register New Signal
+            </button>
+            <div>
+                {loading ? <div style={{ textAlign: 'center', padding: '40px', color: '#b2bec3' }}>Loading...</div> :
+                    signals.length === 0 ? <div style={{ textAlign: 'center', padding: '40px', color: '#b2bec3' }}>No signals yet.</div> :
+                        signals.map(s => <SignalCard key={s.id} data={s} />)
+                }
+            </div>
+        </div>
+    );
+
+    // --- VIEW: WIZARD ---
+    const WizardView = () => (
+        <div className="mobile-container" style={{ display: 'flex', flexDirection: 'column', height: '80vh' }}>
+            {/* Wizard Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', position: 'relative' }}>
+                {step < 5 && (
+                    <button onClick={cancelWizard} style={{ position: 'absolute', left: 0, padding: '10px 0', border: 'none', background: 'transparent', color: '#999', fontWeight: '500' }}>
+                        Cancel
+                    </button>
+                )}
+                <div style={{ fontSize: '1rem', fontWeight: '600', color: '#2d3436' }}>
+                    {step === 5 ? 'Done' : `Step ${step} of 4`}
+                </div>
+            </div>
+
+            {/* Steps */}
+            {step === 1 && <StepScanner onScan={handleStep1Scan} />}
+            {step === 2 && <StepLocation onLocationFound={handleStep2Location} />}
+            {step === 3 && <StepCompass onConfirm={handleStep3Compass} />}
+            {step === 4 && <StepReview data={installData} onComplete={handleStep4Complete} />}
+            {step === 5 && <StepSuccess onFinish={handleFinish} />}
+        </div>
+    );
+
     return (
-        <div style={{ animation: 'fadeIn 0.5s', paddingBottom: '50px' }}>
-            {/* Header - Mobile Responsive Wrapper */}
-            <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '15px' }}>
-                <div>
-                    <h1 style={{ fontSize: '1.8rem', margin: 0, color: '#2d3436' }}>Streetlights</h1>
-                    <p style={{ margin: '5px 0 0', color: '#636e72', fontSize: '0.9rem' }}>Manager Dashboard</p>
-                </div>
-                <button
-                    onClick={() => setScannerOpen(!isScannerOpen)}
-                    style={{
-                        background: isScannerOpen ? '#636e72' : '#6c5ce7', color: 'white', border: 'none',
-                        padding: '10px 20px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem',
-                        flexGrow: 0
-                    }}
-                >
-                    {isScannerOpen ? 'Close Scanner' : 'New Installation'}
-                </button>
-            </div>
-
-            {isScannerOpen && <InlineWizard onCancel={() => setScannerOpen(false)} onComplete={() => setScannerOpen(false)} />}
-
-            {/* List - Mobile Responsive Scroll */}
-            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #dfe6e9', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                <div style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                    <span style={{ fontWeight: '600' }}>All Lights ({lights.length})</span>
-                    <input type="text" placeholder="Search..." style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ddd' }} />
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px', fontSize: '0.9rem' }}>
-                        <thead>
-                            <tr style={{ background: '#f9f9f9', textAlign: 'left', color: '#636e72' }}>
-                                <th style={{ padding: '12px 15px' }}>ID</th>
-                                <th style={{ padding: '12px 15px' }}>Location</th>
-                                <th style={{ padding: '12px 15px' }}>Status</th>
-                                <th style={{ padding: '12px 15px' }}>Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center' }}>Loading...</td></tr> :
-                                lights.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center' }}>No records found.</td></tr> :
-                                    lights.map(l => (
-                                        <tr key={l.id} style={{ borderBottom: '1px solid #f1f1f1' }}>
-                                            <td style={{ padding: '12px 15px', fontWeight: '500', color: '#6c5ce7' }}>{l.lightId}</td>
-                                            <td style={{ padding: '12px 15px' }}>{l.lat?.toFixed(5)}, {l.lng?.toFixed(5)}</td>
-                                            <td style={{ padding: '12px 15px' }}><StatusBadge status={l.status} /></td>
-                                            <td style={{ padding: '12px 15px', color: '#b2bec3' }}>{formatDate(l.installedAt)}</td>
-                                        </tr>
-                                    ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+        <div style={{ paddingBottom: '80px' }}>
+            {view === 'list' ? <ListView /> : <WizardView />}
+            <style>{`.mobile-container { max-width: 600px; margin: 0 auto; height: 100%; }`}</style>
         </div>
     );
 };
