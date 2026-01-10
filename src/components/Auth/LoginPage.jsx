@@ -1,14 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-const ROLES = [
-    { id: 'admin', label: 'Admin', route: '/dashboard/admin' },
-    { id: 'ambulance', label: 'Ambulance', route: '/dashboard/ambulance' },
-    { id: 'fire', label: 'Fire Engine', route: '/dashboard/fire' },
-    { id: 'disaster', label: 'Disaster Management', route: '/dashboard/disaster' },
-    { id: 'police', label: 'Traffic Police', route: '/dashboard/police' },
-    { id: 'installer', label: 'Traffic Lights Installer', route: '/dashboard/installer' }
-];
+import { ROLES } from '../../constants';
+
 
 import { auth, db } from '../../firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';

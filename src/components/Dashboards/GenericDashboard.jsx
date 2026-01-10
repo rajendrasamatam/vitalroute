@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection, query, where } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { ROLES } from '../../constants';
 
 import DashboardTopBar from './Shared/DashboardTopBar';
 import DashboardSidebar from './Shared/DashboardSidebar';
@@ -77,6 +78,14 @@ const GenericDashboard = ({
                     if (docSnap.exists()) {
                         const data = docSnap.data();
                         setUserProfile(data);
+
+                        // SECURITY: Dynamic Redirect if Role Changes or Mismatches
+                        // Allow 'admin' to access any dashboard (Superuser)
+                        if (roleId && data.role && data.role !== roleId && data.role !== 'admin') {
+                            console.log(`Role mismatch: Expected ${roleId}, Got ${data.role}. Redirecting...`);
+                            const correctRoute = ROLES.find(r => r.id === data.role)?.route || '/';
+                            navigate(correctRoute, { replace: true });
+                        }
                     } else {
                         // User exists in Auth but not in Firestore? Should verify logic/User Management creation.
                         console.error("User document not found.");
@@ -96,6 +105,76 @@ const GenericDashboard = ({
 
         return () => unsubscribeAuth();
     }, [navigate]);
+
+    // Availability Toggle Logic
+    const handleToggleOnline = async () => {
+        if (!userProfile || !userProfile.uid) return;
+        const newStatus = userProfile.availability === 'online' ? 'offline' : 'online';
+
+        try {
+            await updateDoc(doc(db, "users", userProfile.uid), {
+                availability: newStatus
+            });
+            // Optimistic update not needed as onSnapshot will trigger re-render
+        } catch (err) {
+            console.error("Failed to toggle availability:", err);
+            alert("Connection failed. Please try again.");
+        }
+    };
+
+
+
+    // --- EMERGENCY DISPATCH SYSTEM ---
+    useEffect(() => {
+        // Only run if user is logged in, has a role, and is ONLINE
+        if (!userProfile || !userProfile.role || userProfile.availability !== 'online') return;
+        if (roleId === 'admin') return; // Admins don't get field dispatches
+
+        // Listen for ACTIVE alerts
+        // Simple Logic: If I am Ambulance, listen for 'AMBULANCE' or 'DISASTER'
+        // Ideally we use a 'requests' query
+        const q = query(collection(db, "emergency_requests"), where("status", "==", "active"));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === "added") {
+                    const alert = change.doc.data();
+
+                    // 1. Role Match?
+                    // normalize alert type: 'AMBULANCE' -> 'ambulance'
+                    const alertType = (alert.type || '').toLowerCase();
+                    const myRole = userProfile.role.toLowerCase();
+
+                    // Match logic
+                    const isRelevant =
+                        (alertType === myRole) ||
+                        (alertType === 'disaster') || // Everyone responds to disaster
+                        (myRole === 'police' && alertType === 'police') ||
+                        (myRole === 'fire' && alertType === 'fire');
+
+                    if (isRelevant) {
+                        // 2. Distance Check (Optional simulation if we had agent location)
+                        // For now, we assume "Nearest Unit" logic effectively pushes to all relevant online units
+                        // and they "Accept" it.
+
+                        // PLAY SOUND or VISUAL CUE
+                        // Check if alert is recent (last 5 mins) to avoid huge spam on login
+                        const now = new Date();
+                        const alertTime = alert.timestamp?.toDate ? alert.timestamp.toDate() : new Date();
+                        const diffMins = (now - alertTime) / 60000;
+
+                        if (diffMins < 30) { // Notify for alerts in last 30 mins
+                            setShowDispatchAlert(change.doc.data()); // Show UI Modal
+                        }
+                    }
+                }
+            });
+        });
+
+        return () => unsubscribe();
+    }, [userProfile, roleId]);
+
+    const [showDispatchAlert, setShowDispatchAlert] = useState(null);
 
     // STRICT NAVIGATION SECURITY: Prevent Back Button
     useEffect(() => {
@@ -178,6 +257,9 @@ const GenericDashboard = ({
                 title={roleTitle}
                 statusText={statusText}
                 statusColor={statusColor}
+                // Only show toggle for non-admins
+                isOnline={userProfile?.availability === 'online'}
+                onToggleOnline={roleId !== 'admin' ? handleToggleOnline : null}
             />
 
             <DashboardSidebar

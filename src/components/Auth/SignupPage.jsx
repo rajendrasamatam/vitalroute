@@ -5,14 +5,8 @@ import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/aut
 import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-const ROLES = [
-    { id: 'admin', label: 'Admin', route: '/dashboard/admin' },
-    { id: 'ambulance', label: 'Ambulance', route: '/dashboard/ambulance' },
-    { id: 'fire', label: 'Fire Engine', route: '/dashboard/fire' },
-    { id: 'disaster', label: 'Disaster Management', route: '/dashboard/disaster' },
-    { id: 'police', label: 'Traffic Police', route: '/dashboard/police' },
-    { id: 'installer', label: 'Traffic Lights Installer', route: '/dashboard/installer' }
-];
+import { ROLES } from '../../constants';
+
 
 const SignupPage = () => {
     const navigate = useNavigate();

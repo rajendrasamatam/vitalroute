@@ -2,6 +2,13 @@ import React from 'react';
 import GenericDashboard from './GenericDashboard';
 import AdminOverview from './Admin/AdminOverview';
 import UserManagement from './Admin/UserManagement';
+import {
+    EmergencyRequests,
+    ActiveVehicles,
+    MakeTrafficSignals as TrafficSignals,
+    SystemLogs,
+    AdminSettings
+} from './Admin/AdminComponents';
 
 const MENU_ITEMS = [
     { id: 'overview', label: 'Dashboard Overview' },
@@ -23,8 +30,15 @@ const AdminDashboard = () => {
             menuItems={MENU_ITEMS}
             OverviewComponent={AdminOverview}
             renderCustomContent={(view) => {
-                if (view === 'users') return <UserManagement />;
-                return null;
+                switch (view) {
+                    case 'users': return <UserManagement />;
+                    case 'requests': return <EmergencyRequests />;
+                    case 'vehicles': return <ActiveVehicles />;
+                    case 'signals': return <TrafficSignals />;
+                    case 'logs': return <SystemLogs />;
+                    case 'settings': return <AdminSettings />;
+                    default: return null;
+                }
             }}
         />
     );

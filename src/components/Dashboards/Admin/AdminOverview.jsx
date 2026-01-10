@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { db } from '../../../firebase';
+import { collection, query, where, getCountFromServer, onSnapshot } from 'firebase/firestore';
 
 const StatCard = ({ label, value, subtext, trend }) => (
     <div style={{
@@ -29,6 +31,38 @@ const StatCard = ({ label, value, subtext, trend }) => (
 );
 
 const AdminOverview = () => {
+    const [stats, setStats] = useState({
+        emergencies: 0,
+        vehicles: 0,
+        junctions: 0,
+        responseTime: '0:00'
+    });
+
+    useEffect(() => {
+        // 1. Listen to Emergencies
+        const unsubEmergencies = onSnapshot(collection(db, "emergency_requests"), (snap) => {
+            setStats(prev => ({ ...prev, emergencies: snap.size }));
+        }, () => { });
+
+        // 2. Listen to Vehicles (Users with fleet roles)
+        // Use 'in' query for multiple roles
+        const qVehicles = query(collection(db, "users"), where("role", "in", ["ambulance", "fire", "police"]));
+        const unsubVehicles = onSnapshot(qVehicles, (snap) => {
+            setStats(prev => ({ ...prev, vehicles: snap.size }));
+        }, () => { });
+
+        // 3. Listen to Signals
+        const unsubSignals = onSnapshot(collection(db, "signals"), (snap) => {
+            setStats(prev => ({ ...prev, junctions: snap.size }));
+        }, () => { });
+
+        return () => {
+            unsubEmergencies();
+            unsubVehicles();
+            unsubSignals();
+        };
+    }, []);
+
     return (
         <div style={{ animation: 'fadeIn 0.6s ease-out' }}>
             <div style={{ marginBottom: '40px' }}>
@@ -43,19 +77,36 @@ const AdminOverview = () => {
                 gap: '20px',
                 marginBottom: '40px'
             }}>
-                <StatCard label="Active Emergencies" value="12" subtext="4 Critical" trend="+20%" />
-                <StatCard label="Total Vehicles" value="48" subtext="On Duty" />
-                <StatCard label="Junctions Controlled" value="156" subtext="Automated" trend="98% Uptime" />
-                <StatCard label="Avg. Response Time" value="4:12" subtext="Minutes" trend="-30s" />
+                <StatCard
+                    label="Active Emergencies"
+                    value={stats.emergencies}
+                    subtext="Real-time Reports"
+                />
+                <StatCard
+                    label="Active Fleet"
+                    value={stats.vehicles}
+                    subtext="Units Deployed"
+                />
+                <StatCard
+                    label="Junctions Controlled"
+                    value={stats.junctions}
+                    subtext="Smart Signals Online"
+                    trend="Stable"
+                />
+                <StatCard
+                    label="Avg. Response Time"
+                    value={stats.responseTime}
+                    subtext="Minutes (Est.)"
+                />
             </div>
 
-            {/* Recent Activity / Visual Placeholder */}
+            {/* Recent Activity / Placeholder Dynamic Feed */}
             <div style={{
                 background: '#fff',
                 borderRadius: '20px',
                 padding: '40px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
-                minHeight: '400px',
+                minHeight: '300px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -63,7 +114,8 @@ const AdminOverview = () => {
                 border: '1px dashed #e0e0e0'
             }}>
                 <div style={{ fontSize: '1.2rem', color: '#888', marginBottom: '10px' }}>Live Activity Feed</div>
-                <p style={{ color: '#bbb' }}>Graphs and activity logs will populate here.</p>
+                <p style={{ color: '#bbb' }}>Waiting for system events...</p>
+                {/* Future: Map 'system_logs' here same as AdminComponents */}
             </div>
 
             <style>{`

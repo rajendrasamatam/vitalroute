@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-
-const ROLES = [
-    { id: 'admin', label: 'Admin' },
-    { id: 'ambulance', label: 'Ambulance' },
-    { id: 'fire', label: 'Fire Engine' },
-    { id: 'disaster', label: 'Disaster Ops' },
-    { id: 'police', label: 'Traffic Police' },
-    { id: 'installer', label: 'Installer' },
-];
+import { ROLES, USER_STATUS } from '../../../constants';
 
 const StatusBadge = ({ status }) => {
     let color = '#888';
@@ -17,16 +9,16 @@ const StatusBadge = ({ status }) => {
     let label = status || 'unknown';
 
     switch (status) {
-        case 'verified':
+        case USER_STATUS.VERIFIED:
             color = '#166534';
             bg = '#dcfce7';
             break;
-        case 'pending':
+        case USER_STATUS.PENDING:
             color = '#b45309';
             bg = '#fef3c7';
             label = 'Needs Verification';
             break;
-        case 'suspended':
+        case USER_STATUS.SUSPENDED:
             color = '#991b1b';
             bg = '#fee2e2';
             break;
@@ -51,8 +43,9 @@ const StatusBadge = ({ status }) => {
     );
 };
 
-const UserRow = ({ user, onAction }) => {
+const UserRow = ({ user, onAction, onRoleChange }) => {
     const [isHovered, setIsHovered] = useState(false);
+    const [isEditingRole, setIsEditingRole] = useState(false);
 
     return (
         <div
@@ -82,9 +75,33 @@ const UserRow = ({ user, onAction }) => {
                 <div style={{ fontSize: '0.85rem', color: '#888' }}>{user.email}</div>
             </div>
 
-            {/* Role */}
-            <div className="user-role" style={{ color: '#555', fontSize: '0.9rem', textTransform: 'capitalize' }}>
-                {ROLES.find(r => r.id === user.role)?.label || user.role}
+            {/* Role - Click to Edit */}
+            <div className="user-role" style={{ color: '#555', fontSize: '0.9rem' }}>
+                {isEditingRole ? (
+                    <select
+                        value={user.role}
+                        onChange={(e) => {
+                            onRoleChange(user.uid, e.target.value);
+                            setIsEditingRole(false);
+                        }}
+                        onBlur={() => setIsEditingRole(false)}
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ padding: '4px', borderRadius: '4px', border: '1px solid #ddd' }}
+                    >
+                        {ROLES.map(role => (
+                            <option key={role.id} value={role.id}>{role.label}</option>
+                        ))}
+                    </select>
+                ) : (
+                    <span
+                        onClick={(e) => { e.stopPropagation(); setIsEditingRole(true); }}
+                        title="Click to edit role"
+                        style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc' }}
+                    >
+                        {ROLES.find(r => r.id === user.role)?.label || user.role}
+                    </span>
+                )}
             </div>
 
             {/* Status */}
@@ -138,7 +155,10 @@ const actionBtnStyle = {
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
+    const [filteredUsers, setFilteredUsers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [roleFilter, setRoleFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     useEffect(() => {
         // Subscribe to real-time updates from Firestore
@@ -157,6 +177,23 @@ const UserManagement = () => {
         return () => unsubscribe();
     }, []);
 
+    useEffect(() => {
+        let result = users;
+
+        if (roleFilter !== 'all') {
+            result = result.filter(user => user.role === roleFilter);
+        }
+
+        if (statusFilter !== 'all') {
+            result = result.filter(user => {
+                if (statusFilter === 'pending') return user.status === 'pending' || !user.status;
+                return user.status === statusFilter;
+            });
+        }
+
+        setFilteredUsers(result);
+    }, [users, roleFilter, statusFilter]);
+
     const handleAction = async (uid, action) => {
         try {
             const userRef = doc(db, "users", uid);
@@ -172,16 +209,51 @@ const UserManagement = () => {
         }
     };
 
+    const handleRoleChange = async (uid, newRole) => {
+        try {
+            const userRef = doc(db, "users", uid);
+            await updateDoc(userRef, { role: newRole });
+        } catch (err) {
+            console.error("Error updating user role:", err);
+            alert("Failed to update user role.");
+        }
+    };
+
     return (
         <div style={{ animation: 'fadeIn 0.6s ease-out', paddingBottom: '40px' }}>
-            <div style={{ marginBottom: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div style={{ marginBottom: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px' }}>
                 <div>
                     <h1 style={{ fontSize: '2.5rem', fontWeight: 400, marginBottom: '10px', letterSpacing: '-0.02em', fontFamily: 'var(--font-heading)' }}>User Control</h1>
-                    <p style={{ color: '#666' }}>Manage access permissions and verification status.</p>
+                    <p style={{ color: '#666' }}>Manage access permissions, verify agents, and update roles.</p>
                 </div>
-                <div style={{ fontSize: '3rem', fontWeight: 200, color: '#ddd' }}>
-                    {users.length} <span style={{ fontSize: '1rem', color: '#888' }}>USERS</span>
+                <div style={{ fontSize: '3rem', fontWeight: 200, color: '#ddd', lineHeight: 1 }}>
+                    {filteredUsers.length} <span style={{ fontSize: '1rem', color: '#888' }}>USERS</span>
                 </div>
+            </div>
+
+            {/* Filters */}
+            <div style={{ marginBottom: '30px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                    style={filterSelectStyle}
+                >
+                    <option value="all">All Roles</option>
+                    {ROLES.map(role => (
+                        <option key={role.id} value={role.id}>{role.label}</option>
+                    ))}
+                </select>
+
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    style={filterSelectStyle}
+                >
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending Verification</option>
+                    <option value="verified">Verified</option>
+                    <option value="suspended">Suspended</option>
+                </select>
             </div>
 
             {/* Table Header - Hide on Mobile */}
@@ -205,9 +277,20 @@ const UserManagement = () => {
 
             {/* List */}
             <div>
-                {users.map(user => (
-                    <UserRow key={user.uid} user={user} onAction={handleAction} />
-                ))}
+                {filteredUsers.length > 0 ? (
+                    filteredUsers.map(user => (
+                        <UserRow
+                            key={user.uid}
+                            user={user}
+                            onAction={handleAction}
+                            onRoleChange={handleRoleChange}
+                        />
+                    ))
+                ) : (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#888', background: '#fff', borderRadius: '12px' }}>
+                        No users match the selected filters.
+                    </div>
+                )}
             </div>
 
             <style>{`
@@ -232,6 +315,7 @@ const UserManagement = () => {
                 .user-row:hover {
                     box-shadow: 0 5px 20px rgba(0,0,0,0.05);
                     transform: scale(1.005);
+                    z-index: 10;
                 }
 
                 .user-actions {
@@ -305,4 +389,15 @@ const UserManagement = () => {
     );
 };
 
+const filterSelectStyle = {
+    padding: '10px 15px',
+    borderRadius: '8px',
+    border: '1px solid #ddd',
+    fontSize: '0.9rem',
+    background: '#fff',
+    outline: 'none',
+    minWidth: '150px'
+};
+
 export default UserManagement;
+

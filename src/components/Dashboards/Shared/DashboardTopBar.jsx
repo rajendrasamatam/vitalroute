@@ -1,6 +1,6 @@
 import React from 'react';
 
-const DashboardTopBar = ({ onMenuClick, title, userProfile, statusText = "SYSTEM ACTIVE", statusColor = "#2ecc71" }) => {
+const DashboardTopBar = ({ onMenuClick, title, userProfile, statusText = "SYSTEM ACTIVE", statusColor = "#2ecc71", isOnline, onToggleOnline }) => {
     return (
         <div className="dashboard-topbar">
             {/* Left: Hamburger + Title */}
@@ -29,6 +29,29 @@ const DashboardTopBar = ({ onMenuClick, title, userProfile, statusText = "SYSTEM
 
             {/* Right: Profile & Status */}
             <div className="topbar-right">
+                {/* Status Toggle (For non-admin) */}
+                {onToggleOnline && (
+                    <div style={{ marginRight: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isOnline ? '#2ecc71' : '#95a5a6' }}>
+                            {isOnline ? 'ONLINE' : 'OFFLINE'}
+                        </span>
+                        <button
+                            onClick={onToggleOnline}
+                            style={{
+                                width: '44px', height: '24px', borderRadius: '12px', border: 'none',
+                                background: isOnline ? '#2ecc71' : '#bdc3c7', position: 'relative',
+                                cursor: 'pointer', transition: 'background 0.3s'
+                            }}
+                        >
+                            <span style={{
+                                width: '20px', height: '20px', background: 'white', borderRadius: '50%',
+                                position: 'absolute', top: '2px', left: isOnline ? '22px' : '2px',
+                                transition: 'left 0.3s', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                            }}></span>
+                        </button>
+                    </div>
+                )}
+
                 {/* Status Indicator */}
                 <div className="status-indicator">
                     <span style={{

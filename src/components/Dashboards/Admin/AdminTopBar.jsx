@@ -19,7 +19,7 @@ const AdminTopBar = ({ onMenuClick, userProfile }) => {
         }}>
             {/* Left: Hamburger + Title */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                <button 
+                <button
                     onClick={onMenuClick}
                     style={{
                         background: 'transparent',
@@ -35,10 +35,10 @@ const AdminTopBar = ({ onMenuClick, userProfile }) => {
                     <span style={{ width: '24px', height: '2px', background: '#000', borderRadius: '2px' }}></span>
                     <span style={{ width: '16px', height: '2px', background: '#000', borderRadius: '2px' }}></span> {/* Uneven line for style */}
                 </button>
-                
-                <span style={{ 
-                    fontSize: '1.2rem', 
-                    fontWeight: 600, 
+
+                <span style={{
+                    fontSize: '1.2rem',
+                    fontWeight: 600,
                     letterSpacing: '-0.01em',
                     opacity: 0.4
                 }}>
