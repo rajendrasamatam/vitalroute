@@ -4,6 +4,8 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, GeoPoi
 import { Html5Qrcode } from 'html5-qrcode';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-compass';
+import 'leaflet-compass/dist/leaflet-compass.min.css';
 import L from 'leaflet';
 
 // Fix for Leaflet icons
@@ -161,126 +163,84 @@ const StepLocation = ({ onLocationFound }) => {
     );
 };
 
-// Step 3: Compass
-const StepCompass = ({ onConfirm }) => {
-    const [heading, setHeading] = useState(0);
-    const [permission, setPermission] = useState('unknown'); // unknown, required, granted, denied
+// Step 3: Compass (Leaflet Version)
+const CompassHandler = ({ onHeadingChange }) => {
+    const map = useMap();
 
     useEffect(() => {
-        // iOS Check
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            setPermission('required');
-        } else {
-            setPermission('granted');
-            const start = () => {
-                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-                window.addEventListener('deviceorientation', handleOrientation, true);
-            };
-            start();
-        }
-    }, []);
-
-    const handleOrientation = useCallback((e) => {
-        let compassHeading = 0;
-
-        if (e.webkitCompassHeading) {
-            // iOS
-            compassHeading = e.webkitCompassHeading;
-        } else if (e.absolute && e.alpha !== null) {
-            // Android Absolute
-            compassHeading = 360 - e.alpha;
-        } else if (e.alpha !== null) {
-            // Fallback
-            compassHeading = 360 - e.alpha;
+        // Initialize leaflet-compass
+        // Check if the control exists on L.Control (it should if imported correctly)
+        if (!L.Control.Compass) {
+            console.error("Leaflet Compass not loaded");
+            return;
         }
 
-        if (compassHeading < 0) compassHeading += 360;
-        if (compassHeading >= 360) compassHeading -= 360;
+        const compass = new L.Control.Compass({
+            autoActive: true,
+            showDigit: true,
+            position: 'topright',
+            textErr: 'Compass not supported'
+        });
 
-        setHeading(Math.round(compassHeading));
-    }, []);
+        // Add to map
+        map.addControl(compass);
 
-    useEffect(() => {
-        return () => {
-            window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
-            window.removeEventListener('deviceorientation', handleOrientation, true);
-        };
-    }, [handleOrientation]);
-
-    const requestPermission = async () => {
-        try {
-            const resp = await DeviceOrientationEvent.requestPermission();
-            if (resp === 'granted') {
-                setPermission('granted');
-                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-                window.addEventListener('deviceorientation', handleOrientation, true);
-            } else {
-                setPermission('denied');
-                alert("Compass permission is required.");
+        // Listen for events
+        const handleRotate = (e) => {
+            // e.angle is the heading (0-360)
+            if (e.angle !== undefined) {
+                onHeadingChange(Math.round(e.angle));
             }
-        } catch (e) {
-            console.error(e);
-            alert("Error: " + e.message);
-        }
-    };
+        };
+
+        map.on('compass:rotated', handleRotate);
+
+        return () => {
+            map.off('compass:rotated', handleRotate);
+            map.removeControl(compass);
+        };
+    }, [map, onHeadingChange]);
+
+    return null;
+};
+
+const StepCompass = ({ onConfirm, location }) => {
+    const [heading, setHeading] = useState(0);
+
+    // Default to London if no location (should not happen in flow)
+    const center = location ? [location.latitude, location.longitude] : [51.505, -0.09];
 
     return (
-        <div style={{ textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ marginBottom: '10px' }}>Align Direction</h3>
+            <p style={{ margin: '0 0 20px 0', color: '#666', fontSize: '0.9rem' }}>
+                Face the traffic light. The map connects to your device compass.
+            </p>
 
-            <div style={{ background: '#e3f2fd', padding: '15px', borderRadius: '8px', marginBottom: '30px', maxWidth: '300px' }}>
-                <p style={{ margin: 0, fontWeight: '500', color: '#0d47a1', fontSize: '0.9rem' }}>
-                    1. Hold phone <b>upright</b> (vertical).<br />
-                    2. Face the <b>traffic light</b> directly.
-                </p>
+            <div style={{ flex: 1, borderRadius: '12px', overflow: 'hidden', marginBottom: '30px', border: '1px solid #ddd', position: 'relative' }}>
+                <MapContainer center={center} zoom={19} style={{ height: '100%', width: '100%' }}>
+                    <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; OSM'
+                    />
+                    {location && <Marker position={center} />}
+                    <CompassHandler onHeadingChange={setHeading} />
+                </MapContainer>
             </div>
 
-            {permission === 'required' ? (
-                <button
-                    onClick={requestPermission}
-                    style={{ padding: '16px 24px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold' }}
-                >
-                    Allow Compass Access
-                </button>
-            ) : (
-                <>
-                    <div style={{
-                        width: '240px', height: '240px', borderRadius: '50%', border: '12px solid #f0f0f0',
-                        position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '40px',
-                        background: 'white', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.05)'
-                    }}>
-                        {['N', 'E', 'S', 'W'].map((d, i) => (
-                            <span key={d} style={{
-                                position: 'absolute', fontWeight: 'bold', color: '#b2bec3',
-                                top: i === 0 ? '10px' : i === 2 ? 'auto' : '50%', bottom: i === 2 ? '10px' : 'auto',
-                                left: i === 3 ? '15px' : i === 1 ? 'auto' : '50%', right: i === 1 ? '15px' : 'auto',
-                                transform: 'translate(-50%, -50%)'
-                            }}>{d}</span>
-                        ))}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', padding: '0 10px' }}>
+                <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#999', textTransform: 'uppercase' }}>Heading</div>
+                    <div style={{ fontSize: '2rem', fontWeight: '800', color: '#2d3436' }}>{heading}°</div>
+                </div>
+            </div>
 
-                        <div style={{
-                            width: '100%', height: '100%', position: 'absolute',
-                            transform: `rotate(${-heading}deg)`, transition: 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)'
-                        }}>
-                            <div style={{
-                                width: '0', height: '0',
-                                borderLeft: '20px solid transparent', borderRight: '20px solid transparent', borderBottom: '40px solid #e74c3c',
-                                position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)',
-                                filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))'
-                            }}></div>
-                        </div>
-
-                        <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#2d3436', zIndex: 2 }}>{heading}°</div>
-                    </div>
-
-                    <button
-                        onClick={() => onConfirm(heading)}
-                        style={{ width: '100%', padding: '16px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.2rem', fontWeight: '600', boxShadow: '0 4px 15px rgba(108, 92, 231, 0.3)' }}
-                    >
-                        Confirm Direction
-                    </button>
-                </>
-            )}
+            <button
+                onClick={() => onConfirm(heading)}
+                style={{ width: '100%', padding: '16px', background: '#6c5ce7', color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.2rem', fontWeight: '600', boxShadow: '0 4px 15px rgba(108, 92, 231, 0.3)' }}
+            >
+                Confirm Direction
+            </button>
         </div>
     );
 };
@@ -455,7 +415,7 @@ const NewInstallations = () => {
             {/* Steps */}
             {step === 1 && <StepScanner onScan={handleStep1Scan} />}
             {step === 2 && <StepLocation onLocationFound={handleStep2Location} />}
-            {step === 3 && <StepCompass onConfirm={handleStep3Compass} />}
+            {step === 3 && <StepCompass onConfirm={handleStep3Compass} location={installData.location} />}
             {step === 4 && <StepReview data={installData} onComplete={handleStep4Complete} />}
             {step === 5 && <StepSuccess onFinish={handleFinish} />}
         </div>
