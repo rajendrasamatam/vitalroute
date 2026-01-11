@@ -13,7 +13,8 @@ export default defineConfig({
         name: 'Vital Route Installer',
         short_name: 'VitalRoute',
         description: 'Traffic Signal Installation Tool',
-        theme_color: '#6c5ce7',
+        theme_color: '#000000',
+        background_color: '#000000',
         icons: [
           {
             src: 'pwa-192x192.png',
