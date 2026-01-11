@@ -11,19 +11,36 @@
     content="VITAL ROUTE reduces emergency response time by creating real-time green corridors for ambulances and fire engines using smart signal control." />
   <style>
     body {
-      background-color: #000000;
       margin: 0;
+      background-color: #ffffff;
+      /* Default for web */
     }
 
     .app-loader {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      width: 100vw;
-      background-color: #000000;
-      color: white;
-      font-family: sans-serif;
+      display: none;
+      /* Hidden by default on web */
+    }
+
+    /* Only apply the dark theme splash screen for PWA (Standalone) */
+    @media (display-mode: standalone) {
+      body {
+        background-color: #000000;
+      }
+
+      .app-loader {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        width: 100vw;
+        background-color: #000000;
+        color: white;
+        font-family: sans-serif;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 9999;
+      }
     }
 
     .rotating-logo {
