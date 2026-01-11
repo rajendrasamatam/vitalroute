@@ -70,36 +70,9 @@ def make_circle_icon(input_path, output_paths, border_ratio=0.05):
             filename = os.path.basename(path)
             
             if "192x192" in filename:
-                target_size = 192
-                padding_factor = 0.5 # Logo will be 50% of the canvas size
-                
-                # Create base (transparent, though for splash screen usually matches theme)
-                # Since we use black theme, transparent is fine as it overlays on black, or we can force black background if transparency issues arise.
-                # Let's stick to transparent for versatility.
-                new_img = Image.new("RGBA", (target_size, target_size), (0, 0, 0, 0))
-                
-                # Resize the circular icon
-                icon_size = int(target_size * padding_factor)
-                resized_icon = final_image.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
-                
-                # Center paste
-                pos = ((target_size - icon_size) // 2, (target_size - icon_size) // 2)
-                new_img.paste(resized_icon, pos, resized_icon)
-                save_img = new_img
-                
+                save_img = final_image.resize((192, 192), Image.Resampling.LANCZOS)
             elif "512x512" in filename:
-                target_size = 512
-                padding_factor = 0.5 # Logo will be 50% of the canvas size
-                
-                new_img = Image.new("RGBA", (target_size, target_size), (0, 0, 0, 0))
-                
-                icon_size = int(target_size * padding_factor)
-                resized_icon = final_image.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
-                
-                pos = ((target_size - icon_size) // 2, (target_size - icon_size) // 2)
-                new_img.paste(resized_icon, pos, resized_icon)
-                save_img = new_img
-                
+                save_img = final_image.resize((512, 512), Image.Resampling.LANCZOS)
             else:
                 # Keep original high res for default icon.png, or maybe limit to 512?
                 # Let's keep it max 512 for main icon to avoid huge files
