@@ -154,36 +154,48 @@ const AdminLiveMap = () => {
                 // Update state with new locations
                 setAmbulances(activeUnits);
 
-                // 2. Fetch Exact Routes (OSRM) if needed
+                // 2. Fetch Exact Routes (Google Maps Directions) if needed
                 activeUnits.forEach(async (amb) => {
                     if (amb.status === 'on_mission' && amb.destLat && amb.destLng) {
-                        // Create a string key for the current route to avoid refetching same route
                         const routeKey = `${amb.destLat},${amb.destLng}`;
 
                         setRoutePolylines(prev => {
-                            // If we already have this exact route cached, don't fetch again
                             if (prev[amb.id] && prev[amb.id].key === routeKey) {
                                 return prev;
                             }
 
-                            // Otherwise, fetch new route
-                            fetch(`https://router.project-osrm.org/route/v1/driving/${amb.lng},${amb.lat};${amb.destLng},${amb.destLat}?overview=full&geometries=geojson`)
-                                .then(res => res.json())
-                                .then(json => {
-                                    if (json.routes && json.routes[0]) {
-                                        const coords = json.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
-                                        setRoutePolylines(current => ({
-                                            ...current,
-                                            [amb.id]: { key: routeKey, path: coords }
-                                        }));
+                            // Use Google Maps DirectionsService instead of OSRM for perfect alignment
+                            if (window.google && window.google.maps) {
+                                const directionsService = new window.google.maps.DirectionsService();
+
+                                directionsService.route(
+                                    {
+                                        origin: { lat: amb.lat, lng: amb.lng },
+                                        destination: { lat: amb.destLat, lng: amb.destLng },
+                                        travelMode: window.google.maps.TravelMode.DRIVING,
+                                    },
+                                    (result, status) => {
+                                        if (status === window.google.maps.DirectionsStatus.OK) {
+                                            // Extract the overview_path which is an array of LatLng objects
+                                            const coords = result.routes[0].overview_path.map(point => ({
+                                                lat: point.lat(),
+                                                lng: point.lng()
+                                            }));
+
+                                            setRoutePolylines(current => ({
+                                                ...current,
+                                                [amb.id]: { key: routeKey, path: coords }
+                                            }));
+                                        } else {
+                                            console.error(`Directions request failed due to ${status}`);
+                                        }
                                     }
-                                })
-                                .catch(err => console.error("OSRM Route Fetch Failed", err));
+                                );
+                            }
 
                             return prev;
                         });
                     } else {
-                        // Remove route if no longer on mission
                         setRoutePolylines(prev => {
                             if (prev[amb.id]) {
                                 const newRoutes = { ...prev };
