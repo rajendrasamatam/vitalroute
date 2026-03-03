@@ -1,0 +1,326 @@
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { auth, db, storage } from '../../firebase';
+import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+import { ROLES } from '../../constants';
+
+
+const SignupPage = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [focused, setFocused] = useState('');
+
+    // Optimistically set state if we have location state from redirects (e.g. from Google Login)
+    const [isGoogleAuth, setIsGoogleAuth] = useState(!!location.state?.email);
+    const [formData, setFormData] = useState({
+        fullName: location.state?.fullName || '',
+        email: location.state?.email || '',
+        password: '',
+        confirmPassword: '',
+        role: ''
+    });
+    const [image, setImage] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                setIsGoogleAuth(true);
+                // Only update if not already set (prevents overwriting user input if they typed something)
+                setFormData(prev => ({
+                    ...prev,
+                    email: user.email || prev.email,
+                    fullName: user.displayName || prev.fullName
+                }));
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const handleFileChange = (e) => {
+        if (e.target.files[0]) {
+            setImage(e.target.files[0]);
+            setImagePreview(URL.createObjectURL(e.target.files[0]));
+        }
+    };
+
+    const handleSignup = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        if (!isGoogleAuth && formData.password !== formData.confirmPassword) {
+            setError("Passwords do not match");
+            setLoading(false);
+            return;
+        }
+
+        if (!image) {
+            setError("Profile photo is required to complete signup.");
+            setLoading(false);
+            return;
+        }
+
+        if (!formData.role) {
+            setError("Please select a role");
+            setLoading(false);
+            return;
+        }
+
+        try {
+            let user = auth.currentUser;
+
+            if (isGoogleAuth) {
+                // If optimistic state says Google Auth, but no user is found, wait or check if we can rely on location state?
+                // No, we NEED the uid to write to Firestore.
+                if (!user) {
+                    // Try one small delay in case auth is initializing? 
+                    // Or simply throw error.
+                    // IMPORTANT: If 'user' is null, we likely have a session issue.
+                    throw new Error("Google authentication session not found. Please try logging in again via Google.");
+                }
+            } else {
+                const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+                user = userCredential.user;
+            }
+
+            let imageUrl = null;
+
+            // 2. Upload Profile Image to ImgBB (if selected)
+            if (image) {
+                const formData = new FormData();
+                formData.append('image', image);
+                const response = await fetch(`https://api.imgbb.com/1/upload?key=${import.meta.env.VITE_IMGBB_API_KEY}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    imageUrl = data.data.url;
+                } else {
+                    console.error("ImgBB Upload Error:", data);
+                }
+            }
+
+            // 3. Store User Data in Firestore
+            await setDoc(doc(db, "users", user.uid), {
+                uid: user.uid,
+                fullName: formData.fullName,
+                email: formData.email,
+                role: formData.role,
+                status: 'pending', // Default status for new users
+                profileImage: imageUrl,
+                createdAt: new Date()
+            });
+
+            // 4. Navigate to specific dashboard
+            const roleRoute = ROLES.find(r => r.id === formData.role)?.route || '/';
+            navigate(roleRoute, { replace: true });
+
+        } catch (err) {
+            console.error("Signup Error:", err);
+            setError(err.message || "Failed to create account");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div style={{
+            width: '100vw',
+            minHeight: '100vh',
+            background: 'var(--color-bg-light)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            position: 'relative',
+            overflowY: 'auto',
+            padding: '40px 0'
+        }}>
+            <div style={{ zIndex: 1, width: '100%', maxWidth: '500px', padding: '20px', animation: 'fadeInUp 0.8s ease-out' }}>
+                <Link to="/login" style={{ textDecoration: 'none', color: '#888', textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.8rem', display: 'block', marginBottom: '30px' }}>&larr; Back to Login</Link>
+
+                <h1 style={{
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: '2.5rem',
+                    marginBottom: '10px',
+                    color: '#000',
+                    lineHeight: 1
+                }}>
+                    {isGoogleAuth ? "COMPLETE YOUR" : "CREATE YOUR"}<br />
+                    {isGoogleAuth ? "PROFILE" : "ACCOUNT"}
+                </h1>
+
+                <p style={{ color: '#666', marginBottom: '40px', lineHeight: 1.5 }}>
+                    Join the intelligent emergency response network.
+                </p>
+
+                {error && <div style={{ color: 'red', marginBottom: '20px', fontSize: '0.9rem' }}>{error}</div>}
+
+                <form onSubmit={handleSignup}>
+
+                    {/* Profile Image & Dropdown */}
+                    <div style={{ marginBottom: '30px', display: 'flex', gap: '20px', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
+                            <div style={{
+                                width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', background: '#e0e0e0',
+                                border: '2px solid #fff', boxShadow: '0 5px 15px rgba(0,0,0,0.1)'
+                            }}>
+                                {imagePreview ? (
+                                    <img src={imagePreview} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+                                        <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>+</span>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: 600 }}>PHOTO*</span>
+                                    </div>
+                                )}
+                            </div>
+                            <input type="file" onChange={handleFileChange} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} />
+                        </div>
+
+                        <div style={{ flexGrow: 1 }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.8rem', fontWeight: 600, color: '#555' }}>SELECT ROLE</label>
+                            <select
+                                value={formData.role}
+                                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                style={{
+                                    width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #ccc',
+                                    background: '#fff', fontSize: '1rem', outline: 'none'
+                                }}
+                            >
+                                <option value="" disabled>-- Choose Role --</option>
+                                {ROLES.map(role => (
+                                    <option key={role.id} value={role.id}>{role.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                        <input
+                            type="text"
+                            placeholder="Full Name"
+                            value={formData.fullName}
+                            onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                            onFocus={() => setFocused('name')}
+                            onBlur={() => setFocused('')}
+                            style={{
+                                width: '100%', padding: '15px 0', background: 'transparent',
+                                border: 'none', borderBottom: `1px solid ${focused === 'name' ? '#000' : '#ccc'}`,
+                                outline: 'none', color: '#000'
+                            }}
+                            required
+                        />
+                        <input
+                            type="email"
+                            placeholder="Email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            onFocus={() => setFocused('email')}
+                            onBlur={() => setFocused('')}
+                            readOnly={isGoogleAuth}
+                            style={{
+                                width: '100%', padding: '15px 0', background: 'transparent',
+                                border: 'none', borderBottom: `1px solid ${focused === 'email' ? '#000' : '#ccc'}`,
+                                outline: 'none', color: isGoogleAuth ? '#666' : '#000',
+                                cursor: isGoogleAuth ? 'not-allowed' : 'text'
+                            }}
+                            required
+                        />
+                    </div>
+
+                    {!isGoogleAuth && (
+                        <div style={{ marginBottom: '40px' }}>
+                            <input
+                                type="password"
+                                placeholder="Password"
+                                value={formData.password}
+                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                onFocus={() => setFocused('password')}
+                                onBlur={() => setFocused('')}
+                                style={{
+                                    width: '100%', padding: '15px 0', background: 'transparent',
+                                    border: 'none', borderBottom: `1px solid ${focused === 'password' ? '#000' : '#ccc'}`,
+                                    outline: 'none', color: '#000', marginBottom: '20px'
+                                }}
+                                required
+                            />
+                            <input
+                                type="password"
+                                placeholder="Confirm Password"
+                                value={formData.confirmPassword}
+                                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                onFocus={() => setFocused('confirm')}
+                                onBlur={() => setFocused('')}
+                                style={{
+                                    width: '100%', padding: '15px 0', background: 'transparent',
+                                    border: 'none', borderBottom: `1px solid ${focused === 'confirm' ? '#000' : '#ccc'}`,
+                                    outline: 'none', color: '#000'
+                                }}
+                                required
+                            />
+                        </div>
+                    )}
+
+                    <button
+                        type="submit"
+                        className="btn-hover-effect"
+                        disabled={loading}
+                        style={{
+                            width: '100%',
+                            padding: '18px',
+                            background: '#000',
+                            color: '#fff',
+                            borderRadius: '50px',
+                            border: 'none',
+                            fontSize: '1rem',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            transition: 'transform 0.2s ease, background 0.2s ease',
+                            opacity: loading ? 0.7 : 1
+                        }}
+                    >
+                        {loading ? 'Processing...' : (isGoogleAuth ? 'Complete Profile' : 'Create Account')}
+                    </button>
+
+                </form>
+
+                <div style={{ marginTop: '30px', textAlign: 'center' }}>
+                    <span style={{ color: '#888' }}>Already have an account? </span>
+                    <Link to="/login" style={{ color: '#000', textDecoration: 'none', fontWeight: 500, borderBottom: '1px solid #000' }}>Login</Link>
+                </div>
+            </div>
+            <style>{`
+                @keyframes fadeInUp {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .btn-hover-effect:hover {
+                    background: #222 !important;
+                    transform: translateY(-2px);
+                }
+                
+                /* Mobile Responsiveness */
+                @media (max-width: 600px) {
+                    form > div[style*="grid-template-columns"] {
+                        grid-template-columns: 1fr !important;
+                        gap: 15px !important;
+                    }
+                    h1 {
+                        font-size: 2rem !important;
+                    }
+                }
+            `}</style>
+        </div>
+    );
+};
+
+export default SignupPage;
