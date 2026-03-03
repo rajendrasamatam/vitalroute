@@ -132,59 +132,76 @@ const AdminLiveMap = () => {
         const unsubscribe = onValue(ambulancesRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const activeUnits = Object.keys(data).map(key => ({
-                    id: key,
-                    ...data[key],
-                    ...data[key].location,
-                    // Ensure lat/lng are numbers
-                    lat: Number(data[key].location.lat),
-                    lng: Number(data[key].location.lng),
-                    destLat: data[key].location.destLat ? Number(data[key].location.destLat) : null,
-                    destLng: data[key].location.destLng ? Number(data[key].location.destLng) : null
-                }));
+                const activeUnits = Object.keys(data).map(key => {
+                    const unit = data[key];
+                    // Support both flat structure (new) and nested location structure (old)
+                    const lat = unit.lat ?? unit.location?.lat;
+                    const lng = unit.lng ?? unit.location?.lng;
+                    const destLat = unit.destLat ?? unit.location?.destLat;
+                    const destLng = unit.destLng ?? unit.location?.destLng;
+
+                    return {
+                        id: key,
+                        ...unit,
+                        // Ensure lat/lng are numbers
+                        lat: lat != null ? Number(lat) : null,
+                        lng: lng != null ? Number(lng) : null,
+                        destLat: destLat != null ? Number(destLat) : null,
+                        destLng: destLng != null ? Number(destLng) : null
+                    };
+                }).filter(unit => unit.lat !== null && unit.lng !== null);
+
+                // Update state with new locations
                 setAmbulances(activeUnits);
+
+                // 2. Fetch Exact Routes (OSRM) if needed
+                activeUnits.forEach(async (amb) => {
+                    if (amb.status === 'on_mission' && amb.destLat && amb.destLng) {
+                        // Create a string key for the current route to avoid refetching same route
+                        const routeKey = `${amb.destLat},${amb.destLng}`;
+
+                        setRoutePolylines(prev => {
+                            // If we already have this exact route cached, don't fetch again
+                            if (prev[amb.id] && prev[amb.id].key === routeKey) {
+                                return prev;
+                            }
+
+                            // Otherwise, fetch new route
+                            fetch(`https://router.project-osrm.org/route/v1/driving/${amb.lng},${amb.lat};${amb.destLng},${amb.destLat}?overview=full&geometries=geojson`)
+                                .then(res => res.json())
+                                .then(json => {
+                                    if (json.routes && json.routes[0]) {
+                                        const coords = json.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+                                        setRoutePolylines(current => ({
+                                            ...current,
+                                            [amb.id]: { key: routeKey, path: coords }
+                                        }));
+                                    }
+                                })
+                                .catch(err => console.error("OSRM Route Fetch Failed", err));
+
+                            return prev;
+                        });
+                    } else {
+                        // Remove route if no longer on mission
+                        setRoutePolylines(prev => {
+                            if (prev[amb.id]) {
+                                const newRoutes = { ...prev };
+                                delete newRoutes[amb.id];
+                                return newRoutes;
+                            }
+                            return prev;
+                        });
+                    }
+                });
+
             } else {
                 setAmbulances([]);
+                setRoutePolylines({});
             }
         });
         return () => unsubscribe();
     }, []);
-
-    // 2. Fetch Exact Routes (OSRM)
-    useEffect(() => {
-        ambulances.forEach(async (amb) => {
-            if (amb.status === 'on_mission' && amb.destLat && amb.destLng) {
-                // Avoid flooding API
-                if (!routePolylines[amb.id]) {
-                    try {
-                        const response = await fetch(
-                            `https://router.project-osrm.org/route/v1/driving/${amb.lng},${amb.lat};${amb.destLng},${amb.destLat}?overview=full&geometries=geojson`
-                        );
-                        const json = await response.json();
-
-                        if (json.routes && json.routes[0]) {
-                            // Convert standard GeoJSON [lng, lat] to Google Maps {lat, lng}
-                            const coords = json.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
-                            setRoutePolylines(prev => ({
-                                ...prev,
-                                [amb.id]: coords
-                            }));
-                        }
-                    } catch (err) {
-                        console.error("OSRM Route Fetch Failed", err);
-                    }
-                }
-            } else {
-                if (routePolylines[amb.id]) {
-                    setRoutePolylines(prev => {
-                        const newRoutes = { ...prev };
-                        delete newRoutes[amb.id];
-                        return newRoutes;
-                    });
-                }
-            }
-        });
-    }, [ambulances]);
 
     // Helper for Route Color (Now based on Urgency Priority first, then Role)
     const getRouteColor = (amb) => {
@@ -287,27 +304,13 @@ const AdminLiveMap = () => {
                                     />
 
                                     {/* The Exact Polyline */}
-                                    {routePolylines[amb.id] ? (
+                                    {routePolylines[amb.id] && routePolylines[amb.id].path && (
                                         <Polyline
-                                            path={routePolylines[amb.id]}
+                                            path={routePolylines[amb.id].path}
                                             options={{
                                                 strokeColor: getRouteColor(amb), // Match aura color
                                                 strokeOpacity: 0.8,
                                                 strokeWeight: 6,
-                                            }}
-                                        />
-                                    ) : (
-                                        /* Fallback straight line */
-                                        <Polyline
-                                            path={[
-                                                { lat: amb.lat, lng: amb.lng },
-                                                { lat: amb.destLat, lng: amb.destLng }
-                                            ]}
-                                            options={{
-                                                strokeColor: getRouteColor(amb),
-                                                strokeOpacity: 0.6,
-                                                strokeWeight: 4,
-                                                geodesic: true
                                             }}
                                         />
                                     )}
